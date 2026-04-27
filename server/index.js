@@ -24,7 +24,11 @@ async function getToken() {
       client_secret: process.env.HELLOASSO_CLIENT_SECRET,
     }),
   })
-  if (!res.ok) throw new Error(`HelloAsso auth failed`)
+  if (!res.ok) {
+    const body = await res.text()
+    console.error(`[HelloAsso auth] HTTP ${res.status}: ${body}`)
+    throw new Error(`HelloAsso auth failed`)
+  }
   const { access_token } = await res.json()
   return access_token
 }
