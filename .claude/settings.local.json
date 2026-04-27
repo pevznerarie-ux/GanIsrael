@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(cp \"C:\\\\Users\\\\ravar\\\\Downloads\\\\IMG_2128.jpeg\" \"C:\\\\Users\\\\ravar\\\\Desktop\\\\site-sinai\\\\public\\\\logo-gan-israel.jpeg\")",
+      "Bash(cp \"C:\\\\Users\\\\ravar\\\\Downloads\\\\logo lis.png\" \"C:\\\\Users\\\\ravar\\\\Desktop\\\\site-sinai\\\\public\\\\logo-sinai.png\")",
+      "WebFetch(domain:ui-ux-pro-max-skill.nextlevelbuilder.io)",
+      "Bash(uipro init *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git config *)"
+    ]
+  }
+}
