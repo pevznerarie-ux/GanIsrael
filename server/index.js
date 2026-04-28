@@ -104,10 +104,14 @@ app.post('/api/create-checkout', async (req, res) => {
         }
       )
 
-      const data = await response.json()
-      console.log('[HelloAsso] Réponse:', JSON.stringify(data))
+      const rawText = await response.text()
+      console.log(`[HelloAsso] HTTP ${response.status}: ${rawText}`)
+      if (!response.ok) {
+        return res.status(502).json({ error: 'HelloAsso error', status: response.status, body: rawText })
+      }
+      const data = JSON.parse(rawText)
       if (!data.redirectUrl) {
-        return res.status(502).json({ error: 'HelloAsso error', details: data })
+        return res.status(502).json({ error: 'HelloAsso no redirectUrl', details: data })
       }
       redirectUrl = data.redirectUrl
     }
