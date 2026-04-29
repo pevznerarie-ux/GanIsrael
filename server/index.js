@@ -94,12 +94,10 @@ app.post('/api/create-checkout', async (req, res) => {
           },
           body: JSON.stringify({
             totalAmount: Math.round(amount * 100),
-            initialAmount: Math.round(amount * 100),
             itemName,
             backUrl: safeBack,
             errorUrl: safeBack,
             returnUrl: returnWithId,
-            containsDonation: false,
           }),
         }
       )
