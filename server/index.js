@@ -83,6 +83,7 @@ app.post('/api/create-checkout', async (req, res) => {
     } else {
       const token = await getToken()
       const slug = process.env.HELLOASSO_ORG_SLUG
+      console.log(`[HelloAsso] slug="${slug}" amount=${Math.round(amount * 100)} returnUrl=${returnWithId}`)
 
       const response = await fetch(
         `${HA_BASE}/v5/organizations/${slug}/checkout-intents`,
