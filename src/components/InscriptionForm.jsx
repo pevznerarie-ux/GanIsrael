@@ -82,6 +82,11 @@ export default function InscriptionForm() {
   const amountHA = form.modePaiement === 'cb' ? total : deposit
 
   const canSubmit =
+    form.parent1Prenom.trim() !== '' &&
+    form.parent1Nom.trim() !== '' &&
+    form.telephone.trim() !== '' &&
+    form.email.trim() !== '' &&
+    form.enfants.every(c => c.prenom.trim() !== '' && c.nom.trim() !== '' && c.dateNaissance !== '' && c.classe !== '') &&
     form.enfants.every(c => c.semaines.length > 0) &&
     form.enfants.every(c => c.vaccinsAJour && c.autorisationSoins && c.autorisationTransport) &&
     form.modePaiement !== '' &&

@@ -24,7 +24,7 @@ export function insertInscription(data) {
   const id = db.nextId++
   db.inscriptions.unshift({
     id,
-    created_at: new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }),
+    created_at: new Date().toISOString(),
     parent1_prenom: data.parent1Prenom,
     parent1_nom:    data.parent1Nom,
     parent2_prenom: data.parent2Prenom || '',

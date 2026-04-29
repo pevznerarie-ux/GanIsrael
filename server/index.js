@@ -35,7 +35,8 @@ async function getToken() {
 
 function publicUrl(url) {
   const base = process.env.VITE_PUBLIC_URL
-  if (!base) return url
+  // N'applique la substitution qu'en production (base non-localhost)
+  if (!base || base.includes('localhost') || base.includes('127.0.0.1')) return url
   if (!url || url.includes('localhost') || url.includes('127.0.0.1')) {
     return url.includes('merci=1') ? `${base}?merci=1` : base
   }
@@ -191,7 +192,7 @@ app.post('/api/confirm-payment', async (req, res) => {
 app.get('/api/admin/inscriptions', (req, res) => {
   if (!authAdmin(req, res)) return
   const rows = getAllInscriptions()
-  res.json(rows.map(r => ({ ...r, enfants: JSON.parse(r.enfants || '[]') })))
+  res.json(rows)
 })
 
 // ── Admin — mise à jour statut ────────────────────────────────────────────────
@@ -210,5 +211,5 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (_, res) => res.sendFile(join(__dirname, '../dist/index.html')))
 }
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.API_PORT || process.env.PORT || 3001
 app.listen(PORT, () => console.log(`API server → http://localhost:${PORT}`))

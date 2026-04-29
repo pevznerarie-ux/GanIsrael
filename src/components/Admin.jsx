@@ -221,7 +221,7 @@ export default function Admin() {
                     </td>
                     <td>
                       <span className={`badge-mode badge-${i.mode_paiement}`}>
-                        {i.mode_paiement === 'cb' ? '💳 CB' : i.mode_paiement === 'cheque' ? '📝 Chèque' : '💵 Espèces'}
+                        {i.mode_paiement === 'cb' ? '💳 CB' : '💵 Espèces / Chèque'}
                       </span>
                     </td>
                     <td>
