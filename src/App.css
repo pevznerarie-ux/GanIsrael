@@ -736,10 +736,14 @@ header, main, footer { position: relative; z-index: 1; }
 }
 
 .pc-pregan {
-  margin-top: 0.5rem;
+  margin-top: 0.6rem;
   font-size: 0.72rem;
-  color: rgba(255,255,255,0.55);
-  font-weight: 600;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0,0,0,0.25);
+  border-radius: 6px;
+  padding: 2px 8px;
+  display: inline-block;
 }
 
 .pc-saving {
