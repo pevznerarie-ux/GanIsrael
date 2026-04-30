@@ -8,7 +8,7 @@ const STATUTS = {
 }
 
 const SEMAINE_LABELS = { 1: 'S1', 2: 'S2', 3: 'S3' }
-const priceFor = (n) => n === 3 ? 525 : n * 180
+const priceFor = (n, classe) => n === 3 ? (classe === 'Pre Gan' ? 480 : 525) : n * (classe === 'Pre Gan' ? 165 : 180)
 
 function exportCSV(inscriptions) {
   const headers = ['ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone', 'Enfants', 'Classes', 'Semaines', 'Mode paiement', 'Total (€)', 'Accompte (€)', 'Solde (€)', 'Statut']
@@ -214,7 +214,7 @@ export default function Admin() {
                           <strong>{e.prenom} {e.nom}</strong>
                           <span className="td-classe">{e.classe}</span>
                           <span className="td-semaines">{e.semaines.map(s => SEMAINE_LABELS[s]).join(' ')}</span>
-                          <span className="td-prix">{priceFor(e.semaines.length)} €</span>
+                          <span className="td-prix">{priceFor(e.semaines.length, e.classe)} €</span>
                         </div>
                       ))}
                       {i.allergies && <div className="td-allergie">⚠ {i.allergies}</div>}

@@ -53,6 +53,7 @@ export default function PricingGrid() {
           <p className="pricing-sub">Centre Aéré Maternelle — Été 2026</p>
         </div>
 
+        <div className="pricing-category-label">Gan 1 · Gan 2 · Gan 3</div>
         <div className="pricing-cards reveal" ref={cardsRef}>
           {/* DOM order: S1, S2, S3 — CSS met S3 au milieu sur desktop */}
           <Card3D className="clay-blue pc-order-1">
@@ -75,6 +76,32 @@ export default function PricingGrid() {
             <div className="pc-weeks-label">Semaines</div>
             <div className="pc-saving">🎉 Économisez 15 €</div>
             <div className="pc-price-wrap"><span className="pc-amount">525</span><span className="pc-cur">€</span></div>
+            <div className="pc-per">par enfant</div>
+          </Card3D>
+        </div>
+
+        <div className="pricing-category-label">Pré-Gan</div>
+        <div className="pricing-cards reveal" ref={cardsRef}>
+          <Card3D className="clay-blue pc-order-1">
+            <div className="pc-weeks-num">1</div>
+            <div className="pc-weeks-label">Semaine</div>
+            <div className="pc-price-wrap"><span className="pc-amount">165</span><span className="pc-cur">€</span></div>
+            <div className="pc-per">par enfant</div>
+          </Card3D>
+
+          <Card3D className="clay-indigo pc-order-3">
+            <div className="pc-weeks-num">2</div>
+            <div className="pc-weeks-label">Semaines</div>
+            <div className="pc-price-wrap"><span className="pc-amount">330</span><span className="pc-cur">€</span></div>
+            <div className="pc-per">par enfant</div>
+          </Card3D>
+
+          <Card3D className="clay-gold featured-card pc-order-2">
+            <div className="pc-ribbon">⭐ Meilleure offre</div>
+            <div className="pc-weeks-num">3</div>
+            <div className="pc-weeks-label">Semaines</div>
+            <div className="pc-saving">🎉 Économisez 15 €</div>
+            <div className="pc-price-wrap"><span className="pc-amount">480</span><span className="pc-cur">€</span></div>
             <div className="pc-per">par enfant</div>
           </Card3D>
         </div>

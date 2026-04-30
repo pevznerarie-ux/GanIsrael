@@ -26,9 +26,11 @@ const INIT = {
   autorisation: false,
 }
 
-const basePrice = (n) => n === 3 ? 525 : n * 180
+const isPregan = (classe) => classe === 'Pre Gan'
+const weeklyRate = (classe) => isPregan(classe) ? 165 : 180
+const basePrice = (n, classe) => n === 3 ? (isPregan(classe) ? 480 : 525) : n * weeklyRate(classe)
 const garderiePrice = (garderie) => (garderie?.length || 0) * 20
-const totalForChild = (child) => basePrice(child.semaines.length) + garderiePrice(child.garderie)
+const totalForChild = (child) => basePrice(child.semaines.length, child.classe) + garderiePrice(child.garderie)
 
 export default function InscriptionForm() {
   const [form, setForm] = useState(INIT)
@@ -283,7 +285,7 @@ export default function InscriptionForm() {
                         onChange={() => toggleSemaine(idx, s.id)} />
                       <span className="sc-label">{s.label}</span>
                       <span className="sc-dates">{s.dates}</span>
-                      <span className="sc-price">180 €</span>
+                      <span className="sc-price">{weeklyRate(child.classe)} €</span>
                     </label>
                     {child.semaines.includes(s.id) && (
                       <label className={`garderie-check ${child.garderie.includes(s.id) ? 'selected' : ''}`}>
@@ -301,7 +303,7 @@ export default function InscriptionForm() {
 
               {child.semaines.length === 3 && (
                 <div className="package-note">
-                  🎉 Offre 3 semaines appliquée : 525 € au lieu de 540 €
+                  🎉 Offre 3 semaines appliquée : {isPregan(child.classe) ? '480 € au lieu de 495 €' : '525 € au lieu de 540 €'}
                 </div>
               )}
             </div>
