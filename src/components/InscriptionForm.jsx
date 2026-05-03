@@ -35,6 +35,8 @@ const totalForChild = (child) => basePrice(child.semaines.length, child.classe) 
 export default function InscriptionForm() {
   const [form, setForm] = useState(INIT)
   const [status, setStatus] = useState('idle')
+  const [helloassoUrl, setHelloassoUrl] = useState(null)
+  const [showModal, setShowModal] = useState(false)
 
   const handleGlobal = (e) => {
     const { name, value, type, checked } = e.target
@@ -169,8 +171,10 @@ export default function InscriptionForm() {
       if (!haRes.ok) throw new Error('Erreur HelloAsso')
       const { url } = await haRes.json()
 
-      // 3. Redirection vers HelloAsso
-      window.location.href = url
+      // 3. Afficher le modal avant la redirection vers HelloAsso
+      setHelloassoUrl(url)
+      setShowModal(true)
+      setStatus('idle')
 
     } catch (err) {
       console.error(err)
@@ -179,6 +183,28 @@ export default function InscriptionForm() {
   }
 
   return (
+    <>
+    {showModal && (
+      <div className="ha-modal-overlay" role="dialog" aria-modal="true">
+        <div className="ha-modal">
+          <div className="ha-modal-icon">🔒</div>
+          <h2 className="ha-modal-title">Redirection vers HelloAsso</h2>
+          <p className="ha-modal-body">
+            Vous allez être redirigé vers <strong>HelloAsso</strong> pour effectuer le paiement.
+          </p>
+          <p className="ha-modal-body">
+            HelloAsso vous proposera de leur faire une contribution pour soutenir leur service aux associations.
+            Vous pouvez ne pas contribuer en cliquant sur <strong>« Modifier ma contribution »</strong> et en mettant <strong>0 €</strong>.
+          </p>
+          <button
+            className="ha-modal-btn"
+            onClick={() => { window.location.href = helloassoUrl }}
+          >
+            J'ai compris, continuer →
+          </button>
+        </div>
+      </div>
+    )}
     <section className="form-section" id="inscription">
       <h2 className="form-title">Formulaire d'inscription</h2>
       <p className="form-subtitle">Remplissez le formulaire pour inscrire votre(vos) enfant(s).</p>
@@ -469,5 +495,6 @@ export default function InscriptionForm() {
         </form>
       </div>
     </section>
+    </>
   )
 }
