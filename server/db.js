@@ -68,3 +68,15 @@ export function updateStatut(id, statut) {
   if (item) item.statut = statut
   save(db)
 }
+
+export function countByClasse() {
+  const db = load()
+  const counts = {}
+  for (const inscription of db.inscriptions) {
+    if (inscription.statut === 'annule') continue
+    for (const enfant of (inscription.enfants || [])) {
+      if (enfant.classe) counts[enfant.classe] = (counts[enfant.classe] || 0) + 1
+    }
+  }
+  return counts
+}

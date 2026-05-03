@@ -1301,6 +1301,14 @@ header, main, footer { position: relative; z-index: 1; }
 
 .error-msg a { color: #dc2626; }
 
+.classe-complet-msg {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: #dc2626;
+  font-weight: 600;
+}
+
 /* ── Footer ── */
 .footer {
   background: linear-gradient(180deg, #0b1d4a 0%, #071230 100%);

@@ -3,7 +3,7 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut } from './db.js'
+import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasse } from './db.js'
 import { sendConfirmationToParent, sendNotificationToAdmin } from './email.js'
 
 const app = express()
@@ -13,6 +13,14 @@ app.use(express.json())
 app.use(cors({ origin: /localhost/ }))
 
 const HA_BASE = 'https://api.helloasso.com'
+
+// Nombre de places maximum par classe (toutes semaines confondues)
+const CAPACITES = {
+  'Pre Gan': 20,
+  'Gan 1':   36,
+  'Gan 2':   36,
+  'Gan 3':   36,
+}
 
 async function getToken() {
   const res = await fetch(`${HA_BASE}/oauth2/token`, {
@@ -52,12 +60,35 @@ function authAdmin(req, res) {
   return true
 }
 
+// ── Disponibilités des classes ────────────────────────────────────────────────
+app.get('/api/disponibilites', (req, res) => {
+  const counts = countByClasse()
+  const result = {}
+  for (const [classe, max] of Object.entries(CAPACITES)) {
+    const inscrits = counts[classe] || 0
+    result[classe] = { max, inscrits, restantes: Math.max(0, max - inscrits) }
+  }
+  res.json(result)
+})
+
 // ── Checkout HelloAsso ────────────────────────────────────────────────────────
 app.post('/api/create-checkout', async (req, res) => {
   const { amount, itemName, returnUrl, backUrl, formData } = req.body
 
   if (!amount || amount <= 0) {
     return res.status(400).json({ error: 'Montant invalide' })
+  }
+
+  // Vérification des places disponibles avant tout enregistrement
+  if (formData?.enfants) {
+    const counts = countByClasse()
+    for (const enfant of formData.enfants) {
+      const { classe } = enfant
+      if (!classe || !CAPACITES[classe]) continue
+      if ((counts[classe] || 0) >= CAPACITES[classe]) {
+        return res.status(409).json({ error: `La classe ${classe} est complète.`, classe })
+      }
+    }
   }
 
   try {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const SEMAINES = [
   { id: 1, label: 'Semaine 1', dates: '6 – 10 juil.' },
@@ -37,6 +37,14 @@ export default function InscriptionForm() {
   const [status, setStatus] = useState('idle')
   const [helloassoUrl, setHelloassoUrl] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [dispos, setDispos] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/disponibilites')
+      .then(r => r.json())
+      .then(setDispos)
+      .catch(() => {})
+  }, [])
 
   const handleGlobal = (e) => {
     const { name, value, type, checked } = e.target
@@ -85,6 +93,8 @@ export default function InscriptionForm() {
   const deposit = form.enfants.length * 50
   const amountHA = form.modePaiement === 'cb' ? total : deposit
 
+  const classeComplete = (classe) => dispos && classe && dispos[classe]?.restantes === 0
+
   const canSubmit =
     form.parent1Prenom.trim() !== '' &&
     form.parent1Nom.trim() !== '' &&
@@ -96,6 +106,7 @@ export default function InscriptionForm() {
     form.modePaiement !== '' &&
     total > 0 &&
     form.autorisation &&
+    form.enfants.every(c => !classeComplete(c.classe)) &&
     status !== 'loading'
 
   const handleSubmit = async (e) => {
@@ -168,6 +179,12 @@ export default function InscriptionForm() {
         }),
       })
 
+      if (haRes.status === 409) {
+        const { classe } = await haRes.json()
+        // Rafraîchir les disponibilités pour refléter l'état actuel
+        fetch('/api/disponibilites').then(r => r.json()).then(setDispos).catch(() => {})
+        throw new Error(`La classe ${classe} est complète. Veuillez sélectionner une autre classe.`)
+      }
       if (!haRes.ok) throw new Error('Erreur HelloAsso')
       const { url } = await haRes.json()
 
@@ -178,7 +195,7 @@ export default function InscriptionForm() {
 
     } catch (err) {
       console.error(err)
-      setStatus('error')
+      setStatus(err.message.includes('complète') ? err.message : 'error')
     }
   }
 
@@ -297,8 +314,19 @@ export default function InscriptionForm() {
                   <select required value={child.classe}
                     onChange={e => updateChild(idx, 'classe', e.target.value)}>
                     <option value="">Sélectionner</option>
-                    {CLASSES.map(c => <option key={c}>{c}</option>)}
+                    {CLASSES.map(c => {
+                      const d = dispos?.[c]
+                      const complet = d?.restantes === 0
+                      return (
+                        <option key={c} value={c} disabled={complet}>
+                          {c}{d ? (complet ? ' — Complet' : ` — ${d.restantes} place${d.restantes > 1 ? 's' : ''}`) : ''}
+                        </option>
+                      )
+                    })}
                   </select>
+                  {child.classe && classeComplete(child.classe) && (
+                    <span className="classe-complet-msg">Cette classe est complète.</span>
+                  )}
                 </div>
               </div>
 
@@ -471,10 +499,12 @@ export default function InscriptionForm() {
             </label>
           </div>
 
-          {status === 'error' && (
+          {status !== 'idle' && status !== 'loading' && (
             <div className="error-msg">
-              Une erreur est survenue. Veuillez réessayer ou nous contacter à{' '}
-              <a href="mailto:ganisrael@bethmenahem-lis.com">ganisrael@bethmenahem-lis.com</a>.
+              {status === 'error'
+                ? <>Une erreur est survenue. Veuillez réessayer ou nous contacter à{' '}
+                    <a href="mailto:ganisrael@bethmenahem-lis.com">ganisrael@bethmenahem-lis.com</a>.</>
+                : status}
             </div>
           )}
 
