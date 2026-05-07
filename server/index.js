@@ -16,7 +16,7 @@ const HA_BASE = 'https://api.helloasso.com'
 
 // Nombre de places maximum par classe (toutes semaines confondues)
 const CAPACITES = {
-  'Pre Gan': 20,
+  'Pre Gan': 0, // TEST — remettre à 20 après
   'Gan 1':   36,
   'Gan 2':   36,
   'Gan 3':   36,
