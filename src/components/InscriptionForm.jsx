@@ -315,11 +315,10 @@ export default function InscriptionForm() {
                     onChange={e => updateChild(idx, 'classe', e.target.value)}>
                     <option value="">Sélectionner</option>
                     {CLASSES.map(c => {
-                      const d = dispos?.[c]
-                      const complet = d?.restantes === 0
+                      const complet = dispos?.[c]?.restantes === 0
                       return (
                         <option key={c} value={c} disabled={complet}>
-                          {c}{d ? (complet ? ' — Complet' : ` — ${d.restantes} place${d.restantes > 1 ? 's' : ''}`) : ''}
+                          {c}{complet ? ' — Complet' : ''}
                         </option>
                       )
                     })}
