@@ -93,7 +93,13 @@ export default function InscriptionForm() {
   const deposit = form.enfants.length * 50
   const amountHA = form.modePaiement === 'cb' ? total : deposit
 
-  const classeComplete = (classe) => dispos && classe && dispos[classe]?.restantes === 0
+  // Vérifie si une semaine est complète pour une classe donnée
+  const semaineComplete = (classe, sid) =>
+    dispos && classe && dispos[classe]?.[sid]?.restantes === 0
+
+  // Vérifie si toutes les semaines d'une classe sont complètes
+  const classeCompletePartout = (classe) =>
+    dispos && classe && [1, 2, 3].every(sid => semaineComplete(classe, sid))
 
   const canSubmit =
     form.parent1Prenom.trim() !== '' &&
@@ -106,7 +112,7 @@ export default function InscriptionForm() {
     form.modePaiement !== '' &&
     total > 0 &&
     form.autorisation &&
-    form.enfants.every(c => !classeComplete(c.classe)) &&
+    form.enfants.every(c => c.semaines.every(sid => !semaineComplete(c.classe, sid))) &&
     status !== 'loading'
 
   const handleSubmit = async (e) => {
@@ -315,7 +321,7 @@ export default function InscriptionForm() {
                     onChange={e => updateChild(idx, 'classe', e.target.value)}>
                     <option value="">Sélectionner</option>
                     {CLASSES.map(c => {
-                      const complet = dispos?.[c]?.restantes === 0
+                      const complet = classeCompletePartout(c)
                       return (
                         <option key={c} value={c} disabled={complet}>
                           {c}{complet ? ' — Complet' : ''}
@@ -323,7 +329,7 @@ export default function InscriptionForm() {
                       )
                     })}
                   </select>
-                  {child.classe && classeComplete(child.classe) && (
+                  {child.classe && classeCompletePartout(child.classe) && (
                     <span className="classe-complet-msg">Cette classe est complète.</span>
                   )}
                 </div>
@@ -331,14 +337,19 @@ export default function InscriptionForm() {
 
               <div className="semaines-label">Semaines souhaitées *</div>
               <div className="semaines-grid">
-                {SEMAINES.map(s => (
+                {SEMAINES.map(s => {
+                  const complet = semaineComplete(child.classe, s.id)
+                  return (
                   <div key={s.id} className="semaine-block">
-                    <label className={`semaine-check ${child.semaines.includes(s.id) ? 'selected' : ''}`}>
+                    <label className={`semaine-check ${child.semaines.includes(s.id) ? 'selected' : ''} ${complet && !child.semaines.includes(s.id) ? 'semaine-disabled' : ''}`}>
                       <input type="checkbox" checked={child.semaines.includes(s.id)}
+                        disabled={complet && !child.semaines.includes(s.id)}
                         onChange={() => toggleSemaine(idx, s.id)} />
                       <span className="sc-label">{s.label}</span>
                       <span className="sc-dates">{s.dates}</span>
-                      <span className="sc-price">{weeklyRate(child.classe)} €</span>
+                      {complet && !child.semaines.includes(s.id)
+                        ? <span className="sc-complet">Complet</span>
+                        : <span className="sc-price">{weeklyRate(child.classe)} €</span>}
                     </label>
                     {child.semaines.includes(s.id) && (
                       <label className={`garderie-check ${child.garderie.includes(s.id) ? 'selected' : ''}`}>
@@ -351,7 +362,8 @@ export default function InscriptionForm() {
                       </label>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
 
               {child.semaines.length === 3 && (

@@ -69,13 +69,19 @@ export function updateStatut(id, statut) {
   save(db)
 }
 
-export function countByClasse() {
+// Compte les enfants par classe ET par semaine (ex: { 'Gan 1': { 1: 5, 2: 3 } })
+export function countByClasseAndSemaine() {
   const db = load()
   const counts = {}
   for (const inscription of db.inscriptions) {
     if (inscription.statut === 'annule') continue
     for (const enfant of (inscription.enfants || [])) {
-      if (enfant.classe) counts[enfant.classe] = (counts[enfant.classe] || 0) + 1
+      const { classe, semaines } = enfant
+      if (!classe || !semaines) continue
+      if (!counts[classe]) counts[classe] = {}
+      for (const sid of semaines) {
+        counts[classe][sid] = (counts[classe][sid] || 0) + 1
+      }
     }
   }
   return counts

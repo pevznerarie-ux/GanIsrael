@@ -980,6 +980,14 @@ header, main, footer { position: relative; z-index: 1; }
 .sc-label { font-size: 0.85rem; font-weight: 800; color: var(--text-dark); }
 .sc-dates { font-size: 0.72rem; color: var(--text-mid); }
 .sc-price { font-size: 0.8rem; font-weight: 700; color: var(--blue-mid); }
+.sc-complet { font-size: 0.75rem; font-weight: 700; color: #dc2626; }
+
+.semaine-check.semaine-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
 
 .garderie-check {
   display: flex;

@@ -3,7 +3,7 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasse } from './db.js'
+import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasseAndSemaine } from './db.js'
 import { sendConfirmationToParent, sendNotificationToAdmin } from './email.js'
 
 const app = express()
@@ -62,11 +62,14 @@ function authAdmin(req, res) {
 
 // ── Disponibilités des classes ────────────────────────────────────────────────
 app.get('/api/disponibilites', (req, res) => {
-  const counts = countByClasse()
+  const counts = countByClasseAndSemaine()
   const result = {}
   for (const [classe, max] of Object.entries(CAPACITES)) {
-    const inscrits = counts[classe] || 0
-    result[classe] = { max, inscrits, restantes: Math.max(0, max - inscrits) }
+    result[classe] = {}
+    for (const sid of [1, 2, 3]) {
+      const inscrits = counts[classe]?.[sid] || 0
+      result[classe][sid] = { max, inscrits, restantes: Math.max(0, max - inscrits) }
+    }
   }
   res.json(result)
 })
@@ -79,14 +82,19 @@ app.post('/api/create-checkout', async (req, res) => {
     return res.status(400).json({ error: 'Montant invalide' })
   }
 
-  // Vérification des places disponibles avant tout enregistrement
+  // Vérification des places disponibles par classe × semaine
   if (formData?.enfants) {
-    const counts = countByClasse()
+    const counts = countByClasseAndSemaine()
     for (const enfant of formData.enfants) {
-      const { classe } = enfant
+      const { classe, semaines } = enfant
       if (!classe || !CAPACITES[classe]) continue
-      if ((counts[classe] || 0) >= CAPACITES[classe]) {
-        return res.status(409).json({ error: `La classe ${classe} est complète.`, classe })
+      for (const sid of (semaines || [])) {
+        if ((counts[classe]?.[sid] || 0) >= CAPACITES[classe]) {
+          return res.status(409).json({
+            error: `La classe ${classe} est complète pour la semaine ${sid}.`,
+            classe, semaine: sid,
+          })
+        }
       }
     }
   }
