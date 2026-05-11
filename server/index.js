@@ -250,6 +250,31 @@ app.post('/api/confirm-payment', async (req, res) => {
   res.json({ ok: true })
 })
 
+// ── Admin — saisie manuelle d'inscription ────────────────────────────────────
+app.post('/api/admin/inscriptions', (req, res) => {
+  if (!authAdmin(req, res)) return
+  const data = req.body
+  const id = insertInscription(data)
+  // Sync Google Sheets
+  const sheetsUrl = process.env.SHEETS_WEBHOOK
+  if (sheetsUrl && data.enfants) {
+    data.enfants.forEach((enfant, idx) => {
+      fetch(sheetsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id, enfantIndex: idx + 1, nombreEnfants: data.enfants.length,
+          parent1Prenom: data.parent1Prenom, parent1Nom: data.parent1Nom,
+          parent2Prenom: data.parent2Prenom || '', parent2Nom: data.parent2Nom || '',
+          telephone: data.telephone, email: data.email,
+          modePaiement: data.modePaiement, total: data.total, accompte: data.accompte, enfant,
+        }),
+      }).catch(() => {})
+    })
+  }
+  res.json({ ok: true, id })
+})
+
 // ── Admin — liste des inscriptions ───────────────────────────────────────────
 app.get('/api/admin/inscriptions', (req, res) => {
   if (!authAdmin(req, res)) return

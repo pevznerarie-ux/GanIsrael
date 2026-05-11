@@ -200,9 +200,142 @@ function TabDashboard({ inscriptions }) {
 }
 
 // ── Onglet Familles ───────────────────────────────────────────────────────────
-function TabFamilles({ inscriptions, password, onStatutChange }) {
+const ENFANT_VIDE = { prenom: '', nom: '', dateNaissance: '', classe: 'Gan 1', semaines: [], garderie: [], allergiesAlimentaires: '', traitementEnCours: '', maladiesChroniques: '' }
+const INSC_VIDE = { parent1Prenom: '', parent1Nom: '', parent2Prenom: '', parent2Nom: '', telephone: '', email: '', modePaiement: 'especes_cheque', total: '', accompte: '', statut: 'accompte_paye', enfants: [{ ...ENFANT_VIDE }] }
+
+function FormInscriptionManuelle({ user, password, onSaved, onClose }) {
+  const [form, setForm] = useState(INSC_VIDE)
+  const [saving, setSaving] = useState(false)
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  const setField = (f, v) => setForm(p => ({ ...p, [f]: v }))
+  const setEnfant = (idx, f, v) => setForm(p => { const e = [...p.enfants]; e[idx] = { ...e[idx], [f]: v }; return { ...p, enfants: e } })
+  const toggleSem = (idx, s) => setForm(p => {
+    const e = [...p.enfants]
+    const sems = e[idx].semaines.includes(s) ? e[idx].semaines.filter(x => x !== s) : [...e[idx].semaines, s]
+    e[idx] = { ...e[idx], semaines: sems }
+    return { ...p, enfants: e }
+  })
+  const addEnfant = () => setForm(p => ({ ...p, enfants: [...p.enfants, { ...ENFANT_VIDE }] }))
+  const removeEnfant = (idx) => setForm(p => ({ ...p, enfants: p.enfants.filter((_, i) => i !== idx) }))
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    const total = Number(form.total)
+    const accompte = form.modePaiement === 'cb' ? total : Number(form.accompte)
+    const res = await fetch('/api/admin/inscriptions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...form, total, accompte }),
+    })
+    const { id } = await res.json()
+    onSaved(id)
+    setSaving(false)
+    onClose()
+  }
+
+  return (
+    <div className="crm-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="crm-modal" style={{ maxWidth: 680 }}>
+        <div className="crm-modal-header">
+          <strong>📋 Saisie manuelle d'inscription</strong>
+          <button className="crm-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSave} className="crm-modal-body">
+          {/* Parents */}
+          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: 800, marginBottom: '0.5rem' }}>Parents</div>
+          <div className="crm-form-row">
+            <div className="form-field"><label>Prénom parent 1 *</label><input required value={form.parent1Prenom} onChange={e => setField('parent1Prenom', e.target.value)} placeholder="Prénom" /></div>
+            <div className="form-field"><label>Nom parent 1 *</label><input required value={form.parent1Nom} onChange={e => setField('parent1Nom', e.target.value)} placeholder="Nom" /></div>
+          </div>
+          <div className="crm-form-row">
+            <div className="form-field"><label>Prénom parent 2</label><input value={form.parent2Prenom} onChange={e => setField('parent2Prenom', e.target.value)} placeholder="Prénom" /></div>
+            <div className="form-field"><label>Nom parent 2</label><input value={form.parent2Nom} onChange={e => setField('parent2Nom', e.target.value)} placeholder="Nom" /></div>
+          </div>
+          <div className="crm-form-row">
+            <div className="form-field"><label>Téléphone *</label><input required value={form.telephone} onChange={e => setField('telephone', e.target.value)} placeholder="06 XX XX XX XX" /></div>
+            <div className="form-field"><label>Email *</label><input required type="email" value={form.email} onChange={e => setField('email', e.target.value)} placeholder="email@exemple.com" /></div>
+          </div>
+
+          {/* Enfants */}
+          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: 800, margin: '1rem 0 0.5rem' }}>
+            Enfants
+            <button type="button" onClick={addEnfant} style={{ marginLeft: '0.75rem', fontSize: '0.75rem', padding: '2px 10px', borderRadius: 100, background: '#eff6ff', color: '#2563eb', border: 'none', cursor: 'pointer', fontWeight: 700 }}>+ Ajouter</button>
+          </div>
+          {form.enfants.map((en, idx) => (
+            <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '0.75rem', background: '#fafafa' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <strong style={{ fontSize: '0.85rem', color: '#1e3a8a' }}>Enfant {idx + 1}</strong>
+                {form.enfants.length > 1 && <button type="button" onClick={() => removeEnfant(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '0.8rem' }}>Supprimer</button>}
+              </div>
+              <div className="crm-form-row">
+                <div className="form-field"><label>Prénom *</label><input required value={en.prenom} onChange={e => setEnfant(idx, 'prenom', e.target.value)} placeholder="Prénom" /></div>
+                <div className="form-field"><label>Nom *</label><input required value={en.nom} onChange={e => setEnfant(idx, 'nom', e.target.value)} placeholder="Nom" /></div>
+              </div>
+              <div className="crm-form-row">
+                <div className="form-field">
+                  <label>Classe *</label>
+                  <select value={en.classe} onChange={e => setEnfant(idx, 'classe', e.target.value)}>
+                    {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="form-field"><label>Date de naissance</label><input type="date" value={en.dateNaissance} onChange={e => setEnfant(idx, 'dateNaissance', e.target.value)} /></div>
+              </div>
+              <div className="form-field">
+                <label>Semaines *</label>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  {SEMAINES.map(s => (
+                    <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={en.semaines.includes(s.id)} onChange={() => toggleSem(idx, s.id)} />
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Paiement */}
+          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: 800, margin: '0.5rem 0' }}>Paiement</div>
+          <div className="crm-form-row">
+            <div className="form-field">
+              <label>Mode de paiement *</label>
+              <select value={form.modePaiement} onChange={e => setField('modePaiement', e.target.value)}>
+                <option value="especes_cheque">💵 Espèces / Chèque</option>
+                <option value="cb">💳 Carte bancaire</option>
+              </select>
+            </div>
+            <div className="form-field">
+              <label>Statut *</label>
+              <select value={form.statut} onChange={e => setField('statut', e.target.value)}>
+                {Object.entries(STATUTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="crm-form-row">
+            <div className="form-field"><label>Total (€) *</label><input required type="number" min="0" value={form.total} onChange={e => setField('total', e.target.value)} placeholder="ex: 360" /></div>
+            {form.modePaiement === 'especes_cheque' && (
+              <div className="form-field"><label>Acompte reçu (€) *</label><input required type="number" min="0" value={form.accompte} onChange={e => setField('accompte', e.target.value)} placeholder="ex: 100" /></div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button type="button" className="btn-refresh" style={{ borderRadius: 8 }} onClick={onClose}>Annuler</button>
+            <button type="submit" className="btn-submit" style={{ padding: '0.5rem 1.5rem' }} disabled={saving}>
+              {saving ? '⏳ Enregistrement…' : '✅ Enregistrer l\'inscription'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function TabFamilles({ inscriptions, user, password, onStatutChange, onInscriptionAdded }) {
   const [filter, setFilter] = useState('tous')
   const [search, setSearch] = useState('')
+  const [showSaisie, setShowSaisie] = useState(false)
 
   const filtered = useMemo(() => {
     let list = filter === 'tous' ? inscriptions : inscriptions.filter(i => i.statut === filter)
@@ -220,7 +353,17 @@ function TabFamilles({ inscriptions, password, onStatutChange }) {
 
   return (
     <div>
+      {showSaisie && (
+        <FormInscriptionManuelle
+          user={user} password={password}
+          onSaved={onInscriptionAdded}
+          onClose={() => setShowSaisie(false)}
+        />
+      )}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="btn-submit" style={{ padding: '0.5rem 1.2rem', fontSize: '0.88rem', whiteSpace: 'nowrap' }} onClick={() => setShowSaisie(true)}>
+          + Saisie manuelle
+        </button>
         <input
           className="crm-search"
           type="text"
@@ -1251,7 +1394,7 @@ export default function Admin() {
 
       <div className="admin-body">
         {tab === 'dashboard' && role === 'admin' && <TabDashboard inscriptions={inscriptions} />}
-        {tab === 'familles'  && role === 'admin' && <TabFamilles inscriptions={inscriptions} password={password} onStatutChange={handleStatutChange} />}
+        {tab === 'familles'  && role === 'admin' && <TabFamilles inscriptions={inscriptions} user={user} password={password} onStatutChange={handleStatutChange} onInscriptionAdded={() => fetchInscriptions(user, password)} />}
         {tab === 'classes'   && <TabClasses inscriptions={inscriptions} />}
         {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} />}
         {tab === 'analytics' && role === 'admin' && <TabAnalytics user={user} password={password} />}
