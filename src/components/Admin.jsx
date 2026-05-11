@@ -580,25 +580,47 @@ function TabWhatsapp({ inscriptions }) {
 
 // ── Composant principal Admin ─────────────────────────────────────────────────
 export default function Admin() {
+  const [user, setUser]         = useState(localStorage.getItem('admin_user') || '')
   const [password, setPassword] = useState(localStorage.getItem('admin_pwd') || '')
-  const [authed, setAuthed] = useState(false)
+  const [role, setRole]         = useState(null)
   const [inscriptions, setInscriptions] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [tab, setTab] = useState('dashboard')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [tab, setTab]           = useState('classes')
 
-  const fetchInscriptions = async (pwd) => {
+  const fetchInscriptions = async (u, pwd) => {
     setLoading(true)
     setError('')
     try {
       const res = await fetch('/api/admin/inscriptions', {
-        headers: { 'x-admin-password': pwd },
+        headers: { 'x-admin-user': u, 'x-admin-password': pwd },
       })
-      if (res.status === 401) { setError('Mot de passe incorrect'); setLoading(false); return }
+      if (res.status === 401) { setError('Identifiants incorrects'); setLoading(false); return }
       const data = await res.json()
       setInscriptions(data)
-      setAuthed(true)
-      localStorage.setItem('admin_pwd', pwd)
+    } catch {
+      setError('Erreur de connexion au serveur')
+    }
+    setLoading(false)
+  }
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user, password }),
+      })
+      if (res.status === 401) { setError('Identifiants incorrects'); setLoading(false); return }
+      const { role: r } = await res.json()
+      setRole(r)
+      localStorage.setItem('admin_user', user)
+      localStorage.setItem('admin_pwd', password)
+      setTab(r === 'admin' ? 'dashboard' : 'classes')
+      await fetchInscriptions(user, password)
     } catch {
       setError('Erreur de connexion au serveur')
     }
@@ -608,13 +630,22 @@ export default function Admin() {
   const handleStatutChange = async (id, statut) => {
     await fetch(`/api/admin/inscriptions/${id}/statut`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      headers: { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password },
       body: JSON.stringify({ statut }),
     })
     setInscriptions(prev => prev.map(i => i.id === id ? { ...i, statut } : i))
   }
 
-  if (!authed) {
+  const handleLogout = () => {
+    localStorage.removeItem('admin_user')
+    localStorage.removeItem('admin_pwd')
+    setRole(null)
+    setUser('')
+    setPassword('')
+    setInscriptions([])
+  }
+
+  if (!role) {
     return (
       <div className="admin-login">
         <div className="admin-login-card">
@@ -623,16 +654,28 @@ export default function Admin() {
             <h1>Administration</h1>
             <p>Gan Israel Beth Hillel</p>
           </div>
-          <form onSubmit={e => { e.preventDefault(); fetchInscriptions(password) }}>
+          <form onSubmit={handleLogin}>
             <div className="form-field">
-              <label>Mot de passe admin</label>
+              <label>Nom d'utilisateur</label>
+              <input
+                type="text"
+                value={user}
+                onChange={e => setUser(e.target.value)}
+                placeholder="Nom d'utilisateur"
+                required
+                autoFocus
+                autoComplete="username"
+              />
+            </div>
+            <div className="form-field">
+              <label>Mot de passe</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Mot de passe"
                 required
-                autoFocus
+                autoComplete="current-password"
               />
             </div>
             {error && <div className="error-msg">{error}</div>}
@@ -645,12 +688,13 @@ export default function Admin() {
     )
   }
 
-  const TABS = [
-    { id: 'dashboard', label: '📊 Dashboard' },
-    { id: 'familles',  label: `👨‍👩‍👧 Familles (${inscriptions.length})` },
-    { id: 'classes',   label: '🏫 Par classe' },
-    { id: 'whatsapp',  label: `💬 WhatsApp & Soldes` },
+  const ALL_TABS = [
+    { id: 'dashboard', label: '📊 Dashboard',                         roles: ['admin'] },
+    { id: 'familles',  label: `👨‍👩‍👧 Familles (${inscriptions.length})`, roles: ['admin'] },
+    { id: 'classes',   label: '🏫 Par classe',                        roles: ['admin', 'animatrice'] },
+    { id: 'whatsapp',  label: '💬 WhatsApp & Soldes',                  roles: ['admin'] },
   ]
+  const TABS = ALL_TABS.filter(t => t.roles.includes(role))
 
   return (
     <div className="admin-page">
@@ -659,13 +703,15 @@ export default function Admin() {
           <span className="admin-topbar-logo">✡</span>
           <div>
             <div className="admin-topbar-title">CRM — Gan Israel Beth Hillel</div>
-            <div className="admin-topbar-sub">Été 2026</div>
+            <div className="admin-topbar-sub">
+              {role === 'admin' ? '👑 Direction' : '🎨 Équipe animatrice'} · Été 2026
+            </div>
           </div>
         </div>
         <div className="admin-topbar-right">
-          <button className="btn-csv" onClick={() => exportCSV(inscriptions)}>⬇ CSV</button>
-          <button className="btn-refresh" onClick={() => fetchInscriptions(password)}>↻ Actualiser</button>
-          <button className="btn-logout" onClick={() => { localStorage.removeItem('admin_pwd'); setAuthed(false); setPassword(''); setInscriptions([]) }}>Déconnexion</button>
+          {role === 'admin' && <button className="btn-csv" onClick={() => exportCSV(inscriptions)}>⬇ CSV</button>}
+          <button className="btn-refresh" onClick={() => fetchInscriptions(user, password)}>↻ Actualiser</button>
+          <button className="btn-logout" onClick={handleLogout}>Déconnexion</button>
         </div>
       </div>
 
@@ -678,10 +724,10 @@ export default function Admin() {
       </div>
 
       <div className="admin-body">
-        {tab === 'dashboard' && <TabDashboard inscriptions={inscriptions} />}
-        {tab === 'familles'  && <TabFamilles inscriptions={inscriptions} password={password} onStatutChange={handleStatutChange} />}
+        {tab === 'dashboard' && role === 'admin' && <TabDashboard inscriptions={inscriptions} />}
+        {tab === 'familles'  && role === 'admin' && <TabFamilles inscriptions={inscriptions} password={password} onStatutChange={handleStatutChange} />}
         {tab === 'classes'   && <TabClasses inscriptions={inscriptions} />}
-        {tab === 'whatsapp'  && <TabWhatsapp inscriptions={inscriptions} />}
+        {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} />}
       </div>
     </div>
   )

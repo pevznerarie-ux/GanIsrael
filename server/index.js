@@ -51,14 +51,28 @@ function publicUrl(url) {
   return url
 }
 
+function getRole(user, pwd) {
+  if (user === process.env.ADMIN_USER && pwd === process.env.ADMIN_PASSWORD) return 'admin'
+  if (user === process.env.ANIMATRICE_USER && pwd === process.env.ANIMATRICE_PASSWORD) return 'animatrice'
+  return null
+}
+
 function authAdmin(req, res) {
-  const pwd = req.headers['x-admin-password']
-  if (pwd !== process.env.ADMIN_PASSWORD) {
+  const user = req.headers['x-admin-user']
+  const pwd  = req.headers['x-admin-password']
+  if (!getRole(user, pwd)) {
     res.status(401).json({ error: 'Non autorisé' })
     return false
   }
   return true
 }
+
+app.post('/api/admin/login', (req, res) => {
+  const { user, password } = req.body
+  const role = getRole(user, password)
+  if (!role) return res.status(401).json({ error: 'Identifiants incorrects' })
+  res.json({ role })
+})
 
 // ── Disponibilités des classes ────────────────────────────────────────────────
 app.get('/api/disponibilites', (req, res) => {
