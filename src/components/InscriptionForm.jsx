@@ -179,7 +179,7 @@ export default function InscriptionForm() {
             email: form.email,
             modePaiement: form.modePaiement,
             total,
-            accompte: deposit,
+            accompte: amountHA,
             enfants: form.enfants,
           },
         }),

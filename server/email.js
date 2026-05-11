@@ -84,7 +84,7 @@ export async function sendConfirmationToParent(data) {
         <td style="padding:4px 0;text-align:right;font-weight:800;color:#1e3a8a;font-size:18px">${total} €</td>
       </tr>
       <tr>
-        <td style="padding:4px 0;color:#475569">Accompte réglé via HelloAsso</td>
+        <td style="padding:4px 0;color:#475569">${solde > 0 ? 'Acompte réglé via HelloAsso' : 'Total réglé via HelloAsso 💳'}</td>
         <td style="padding:4px 0;text-align:right;color:#16a34a;font-weight:700">${accompte} € ✓</td>
       </tr>
       ${solde > 0 ? `<tr>
