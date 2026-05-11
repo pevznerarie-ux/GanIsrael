@@ -17,7 +17,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
-        start_url: '/?admin=1',
+        start_url: '/admin',
         icons: [
           { src: 'icons/pwa-64x64.png',             sizes: '64x64',     type: 'image/png' },
           { src: 'icons/pwa-192x192.png',            sizes: '192x192',   type: 'image/png' },
