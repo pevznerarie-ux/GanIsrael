@@ -1,0 +1,17 @@
+{
+  "name": "Gan Israel Beth Hillel",
+  "short_name": "Gan Israel",
+  "description": "CRM Inscriptions Centre Aéré",
+  "theme_color": "#1e3a8a",
+  "background_color": "#1e3a8a",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/admin",
+  "icons": [
+    { "src": "/icons/pwa-64x64.png",            "sizes": "64x64",   "type": "image/png" },
+    { "src": "/icons/pwa-192x192.png",           "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/pwa-512x512.png",           "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/maskable-icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
