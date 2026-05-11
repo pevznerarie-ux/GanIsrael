@@ -342,13 +342,66 @@ const PAGE_LABELS = {
 function TabAnalytics({ user, password }) {
   const [data, setData] = useState(null)
   const [periode, setPeriode] = useState(30)
+  const [liveEvents, setLiveEvents] = useState([])
+  const [todayLive, setTodayLive] = useState({ views: 0, uniques: 0 })
+  const [connected, setConnected] = useState(false)
 
   const headers = { 'x-admin-user': user, 'x-admin-password': password }
 
   useEffect(() => {
     fetch('/api/admin/analytics', { headers })
       .then(r => r.json())
-      .then(setData)
+      .then(d => {
+        setData(d)
+        const today = new Date().toISOString().slice(0, 10)
+        const td = d.days?.[today] || { views: 0, uniques: [] }
+        setTodayLive({ views: td.views, uniques: td.uniques.length })
+      })
+  }, [])
+
+  useEffect(() => {
+    const es = new EventSource(
+      `/api/admin/analytics/live?u=${encodeURIComponent(user)}&p=${encodeURIComponent(password)}`,
+      // headers not supported in EventSource — on envoie via query params
+    )
+    // EventSource ne supporte pas les headers custom, on utilise une alternative
+    es.close()
+
+    // Alternative : fetch SSE manuel via ReadableStream
+    const ctrl = new AbortController()
+    fetch('/api/admin/analytics/live', { headers, signal: ctrl.signal })
+      .then(res => {
+        setConnected(true)
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
+        function read() {
+          reader.read().then(({ done, value }) => {
+            if (done) { setConnected(false); return }
+            buf += decoder.decode(value, { stream: true })
+            const lines = buf.split('\n')
+            buf = lines.pop()
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const event = JSON.parse(line.slice(6))
+                  if (event.type === 'init') return
+                  setTodayLive({ views: event.todayViews, uniques: event.todayUniques })
+                  setLiveEvents(prev => [{
+                    ...event,
+                    id: Date.now() + Math.random(),
+                  }, ...prev].slice(0, 20))
+                } catch {}
+              }
+            }
+            read()
+          }).catch(() => setConnected(false))
+        }
+        read()
+      })
+      .catch(() => setConnected(false))
+
+    return () => ctrl.abort()
   }, [])
 
   const stats = useMemo(() => {
@@ -382,18 +435,30 @@ function TabAnalytics({ user, password }) {
 
   if (!data) return <div className="admin-empty">Chargement…</div>
 
-  const today = new Date().toISOString().slice(0, 10)
-  const todayData = data.days[today] || { views: 0, uniques: [] }
-
   return (
     <div>
+      {/* Bandeau LIVE */}
+      <div className="crm-live-bar">
+        <span className={`crm-live-dot ${connected ? 'live' : 'offline'}`} />
+        <span className="crm-live-label">{connected ? 'LIVE' : 'Hors ligne'}</span>
+        <span className="crm-live-stats">
+          <strong>{todayLive.views}</strong> vues &nbsp;·&nbsp; <strong>{todayLive.uniques}</strong> visiteurs uniques aujourd'hui
+        </span>
+        {liveEvents.length > 0 && (
+          <span className="crm-live-last">
+            Dernière visite : <strong>{PAGE_LABELS[liveEvents[0].path] || liveEvents[0].path}</strong>
+            &nbsp;·&nbsp; {SOURCE_LABELS[liveEvents[0].source]?.icon} {new Date(liveEvents[0].time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+        )}
+      </div>
+
       {/* Stats du jour */}
       <div className="admin-stats" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: '1rem' }}>
         {[
-          { label: "Vues aujourd'hui",    value: todayData.views,           icon: '👁' },
-          { label: "Visiteurs uniques aujourd'hui", value: todayData.uniques.length, icon: '🧑' },
-          { label: `Vues (${periode}j)`,  value: stats?.totalViews ?? 0,    icon: '📈' },
-          { label: `Uniques (${periode}j)`,value: stats?.totalUniques ?? 0, icon: '👥' },
+          { label: "Vues aujourd'hui",     value: todayLive.views,           icon: '👁' },
+          { label: "Visiteurs uniques",    value: todayLive.uniques,         icon: '🧑' },
+          { label: `Vues (${periode}j)`,   value: stats?.totalViews ?? 0,    icon: '📈' },
+          { label: `Uniques (${periode}j)`,value: stats?.totalUniques ?? 0,  icon: '👥' },
         ].map(s => (
           <div key={s.label} className="admin-stat-card">
             <div className="asc-icon">{s.icon}</div>
@@ -431,6 +496,23 @@ function TabAnalytics({ user, password }) {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Flux live */}
+      {liveEvents.length > 0 && (
+        <div className="crm-card" style={{ marginBottom: '1rem' }}>
+          <div className="crm-card-title">Flux en direct</div>
+          <div className="crm-live-feed">
+            {liveEvents.map(e => (
+              <div key={e.id} className="crm-live-event">
+                <span className="crm-live-event-time">{new Date(e.time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                <span className="crm-live-event-page">{PAGE_LABELS[e.path] || e.path}</span>
+                <span className="crm-live-event-src">{SOURCE_LABELS[e.source]?.icon} {SOURCE_LABELS[e.source]?.label}</span>
+                {e.isNew && <span className="crm-live-event-new">Nouveau</span>}
+              </div>
+            ))}
           </div>
         </div>
       )}

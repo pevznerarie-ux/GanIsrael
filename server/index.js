@@ -3,7 +3,7 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics } from './db.js'
+import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
 import { sendConfirmationToParent, sendNotificationToAdmin } from './email.js'
 
 const app = express()
@@ -261,6 +261,38 @@ app.get('/api/admin/inscriptions', (req, res) => {
 app.get('/api/admin/analytics', (req, res) => {
   if (!authAdmin(req, res)) return
   res.json(getAnalytics())
+})
+
+// SSE clients connectés
+const liveClients = new Set()
+onVisit((event) => {
+  for (const client of liveClients) {
+    client.write(`data: ${JSON.stringify(event)}\n\n`)
+  }
+})
+
+app.get('/api/admin/analytics/live', (req, res) => {
+  const user = req.headers['x-admin-user']
+  const pwd  = req.headers['x-admin-password']
+  if (!getRole(user, pwd)) return res.status(401).end()
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.flushHeaders()
+
+  // Envoyer le nombre de clients connectés
+  res.write(`data: ${JSON.stringify({ type: 'init', clients: liveClients.size + 1 })}\n\n`)
+  liveClients.add(res)
+
+  // Heartbeat toutes les 30s pour garder la connexion ouverte
+  const heartbeat = setInterval(() => res.write(': ping\n\n'), 30000)
+
+  req.on('close', () => {
+    liveClients.delete(res)
+    clearInterval(heartbeat)
+  })
 })
 
 // ── Admin — visiteurs ─────────────────────────────────────────────────────────

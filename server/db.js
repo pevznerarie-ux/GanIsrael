@@ -90,20 +90,25 @@ function getSource(referer) {
   return 'autre'
 }
 
+const visitListeners = []
+export function onVisit(cb) { visitListeners.push(cb) }
+
 export function recordVisit({ path, referer, ip }) {
   const db = loadAnalytics()
   const today = new Date().toISOString().slice(0, 10)
   if (!db.days[today]) db.days[today] = { views: 0, uniques: [], pages: {}, sources: {} }
   const day = db.days[today]
   day.views++
-  if (!day.uniques.includes(ip)) day.uniques.push(ip)
+  const isNew = !day.uniques.includes(ip)
+  if (isNew) day.uniques.push(ip)
   day.pages[path] = (day.pages[path] || 0) + 1
   const src = getSource(referer)
   day.sources[src] = (day.sources[src] || 0) + 1
-  // Garder seulement les 90 derniers jours
   const keys = Object.keys(db.days).sort()
   if (keys.length > 90) delete db.days[keys[0]]
   saveAnalytics(db)
+  const event = { path, source: src, isNew, time: new Date().toISOString(), todayViews: day.views, todayUniques: day.uniques.length }
+  visitListeners.forEach(cb => cb(event))
 }
 
 export function getAnalytics() {
