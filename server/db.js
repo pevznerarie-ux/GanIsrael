@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const dbDir = join(__dirname, '../db')
 const dbFile = join(dbDir, 'inscriptions.json')
+const visitFile = join(dbDir, 'visiteurs.json')
 mkdirSync(dbDir, { recursive: true })
 
 function load() {
@@ -17,6 +18,56 @@ function load() {
 
 function save(data) {
   writeFileSync(dbFile, JSON.stringify(data, null, 2), 'utf8')
+}
+
+function loadVisiteurs() {
+  try {
+    return JSON.parse(readFileSync(visitFile, 'utf8'))
+  } catch {
+    return { visiteurs: [], nextId: 1 }
+  }
+}
+
+function saveVisiteurs(data) {
+  writeFileSync(visitFile, JSON.stringify(data, null, 2), 'utf8')
+}
+
+export function getAllVisiteurs() {
+  return loadVisiteurs().visiteurs
+}
+
+export function insertVisiteur(data) {
+  const db = loadVisiteurs()
+  const id = db.nextId++
+  db.visiteurs.unshift({
+    id,
+    created_at: new Date().toISOString(),
+    prenom: data.prenom,
+    nom: data.nom,
+    telephone: data.telephone || '',
+    email: data.email || '',
+    enfants: data.enfants || '',
+    classe_interessee: data.classe_interessee || '',
+    semaines_interessees: data.semaines_interessees || [],
+    source: data.source || 'visite',
+    statut: data.statut || 'a_rappeler',
+    notes: data.notes || '',
+  })
+  saveVisiteurs(db)
+  return id
+}
+
+export function updateVisiteur(id, data) {
+  const db = loadVisiteurs()
+  const item = db.visiteurs.find(v => v.id === +id)
+  if (item) Object.assign(item, data)
+  saveVisiteurs(db)
+}
+
+export function deleteVisiteur(id) {
+  const db = loadVisiteurs()
+  db.visiteurs = db.visiteurs.filter(v => v.id !== +id)
+  saveVisiteurs(db)
 }
 
 export function insertInscription(data) {

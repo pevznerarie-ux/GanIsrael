@@ -3,7 +3,7 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasseAndSemaine } from './db.js'
+import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur } from './db.js'
 import { sendConfirmationToParent, sendNotificationToAdmin } from './email.js'
 
 const app = express()
@@ -246,6 +246,30 @@ app.get('/api/admin/inscriptions', (req, res) => {
   if (!authAdmin(req, res)) return
   const rows = getAllInscriptions()
   res.json(rows)
+})
+
+// ── Admin — visiteurs ─────────────────────────────────────────────────────────
+app.get('/api/admin/visiteurs', (req, res) => {
+  if (!authAdmin(req, res)) return
+  res.json(getAllVisiteurs())
+})
+
+app.post('/api/admin/visiteurs', (req, res) => {
+  if (!authAdmin(req, res)) return
+  const id = insertVisiteur(req.body)
+  res.json({ ok: true, id })
+})
+
+app.patch('/api/admin/visiteurs/:id', (req, res) => {
+  if (!authAdmin(req, res)) return
+  updateVisiteur(req.params.id, req.body)
+  res.json({ ok: true })
+})
+
+app.delete('/api/admin/visiteurs/:id', (req, res) => {
+  if (!authAdmin(req, res)) return
+  deleteVisiteur(req.params.id)
+  res.json({ ok: true })
 })
 
 // ── Admin — mise à jour statut ────────────────────────────────────────────────

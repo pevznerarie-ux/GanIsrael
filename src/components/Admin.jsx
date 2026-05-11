@@ -324,6 +324,268 @@ function TabFamilles({ inscriptions, password, onStatutChange }) {
   )
 }
 
+// ── Onglet Visiteurs ─────────────────────────────────────────────────────────
+const STATUTS_VISITEUR = {
+  a_rappeler:  { label: 'À rappeler',   color: '#f59e0b', bg: '#fef3c7' },
+  interesse:   { label: 'Intéressé',   color: '#2563eb', bg: '#dbeafe' },
+  inscrit:     { label: 'Inscrit',      color: '#16a34a', bg: '#dcfce7' },
+  pas_suite:   { label: 'Pas de suite', color: '#94a3b8', bg: '#f1f5f9' },
+}
+
+const SOURCES = [
+  { value: 'visite',      label: '🚶 Visite physique' },
+  { value: 'telephone',   label: '📞 Appel téléphonique' },
+  { value: 'email',       label: '✉ Email' },
+  { value: 'whatsapp',    label: '💬 WhatsApp' },
+  { value: 'bouche_oreille', label: '🗣 Bouche à oreille' },
+  { value: 'reseaux',     label: '📱 Réseaux sociaux' },
+  { value: 'autre',       label: '📌 Autre' },
+]
+
+const VIDE = { prenom: '', nom: '', telephone: '', email: '', enfants: '', classe_interessee: '', semaines_interessees: [], source: 'visite', statut: 'a_rappeler', notes: '' }
+
+function TabVisiteurs({ user, password }) {
+  const [visiteurs, setVisiteurs] = useState([])
+  const [showForm, setShowForm] = useState(false)
+  const [editId, setEditId] = useState(null)
+  const [form, setForm] = useState(VIDE)
+  const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+  const [filterStatut, setFilterStatut] = useState('tous')
+
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  useEffect(() => {
+    fetch('/api/admin/visiteurs', { headers })
+      .then(r => r.json())
+      .then(setVisiteurs)
+  }, [])
+
+  const filtered = visiteurs.filter(v => {
+    const q = search.toLowerCase()
+    const matchSearch = !q || `${v.prenom} ${v.nom} ${v.telephone} ${v.email}`.toLowerCase().includes(q)
+    const matchStatut = filterStatut === 'tous' || v.statut === filterStatut
+    return matchSearch && matchStatut
+  })
+
+  const openNew = () => { setForm(VIDE); setEditId(null); setShowForm(true) }
+  const openEdit = (v) => { setForm({ ...v }); setEditId(v.id); setShowForm(true) }
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    if (editId) {
+      await fetch(`/api/admin/visiteurs/${editId}`, { method: 'PATCH', headers, body: JSON.stringify(form) })
+      setVisiteurs(prev => prev.map(v => v.id === editId ? { ...v, ...form } : v))
+    } else {
+      const res = await fetch('/api/admin/visiteurs', { method: 'POST', headers, body: JSON.stringify(form) })
+      const { id } = await res.json()
+      setVisiteurs(prev => [{ ...form, id, created_at: new Date().toISOString() }, ...prev])
+    }
+    setSaving(false)
+    setShowForm(false)
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Supprimer ce visiteur ?')) return
+    await fetch(`/api/admin/visiteurs/${id}`, { method: 'DELETE', headers })
+    setVisiteurs(prev => prev.filter(v => v.id !== id))
+  }
+
+  const handleStatutChange = async (id, statut) => {
+    await fetch(`/api/admin/visiteurs/${id}`, { method: 'PATCH', headers, body: JSON.stringify({ statut }) })
+    setVisiteurs(prev => prev.map(v => v.id === id ? { ...v, statut } : v))
+  }
+
+  const f = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
+  const toggleSemaine = (s) => setForm(prev => ({
+    ...prev,
+    semaines_interessees: prev.semaines_interessees.includes(s)
+      ? prev.semaines_interessees.filter(x => x !== s)
+      : [...prev.semaines_interessees, s]
+  }))
+
+  return (
+    <div>
+      {/* Barre d'outils */}
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="btn-submit" style={{ padding: '0.5rem 1.2rem', fontSize: '0.88rem' }} onClick={openNew}>
+          + Ajouter un visiteur
+        </button>
+        <input className="crm-search" type="text" placeholder="🔍 Rechercher…" value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="admin-filters" style={{ margin: 0 }}>
+          {['tous', ...Object.keys(STATUTS_VISITEUR)].map(s => (
+            <button key={s} className={`admin-filter-btn ${filterStatut === s ? 'active' : ''}`} onClick={() => setFilterStatut(s)}>
+              {s === 'tous' ? `Tous (${visiteurs.length})` : `${STATUTS_VISITEUR[s].label} (${visiteurs.filter(v => v.statut === s).length})`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Formulaire */}
+      {showForm && (
+        <div className="crm-modal-overlay" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
+          <div className="crm-modal">
+            <div className="crm-modal-header">
+              <strong>{editId ? 'Modifier le visiteur' : 'Nouveau visiteur'}</strong>
+              <button className="crm-modal-close" onClick={() => setShowForm(false)}>✕</button>
+            </div>
+            <form onSubmit={handleSave} className="crm-modal-body">
+              <div className="crm-form-row">
+                <div className="form-field">
+                  <label>Prénom *</label>
+                  <input required value={form.prenom} onChange={e => f('prenom', e.target.value)} placeholder="Prénom" />
+                </div>
+                <div className="form-field">
+                  <label>Nom *</label>
+                  <input required value={form.nom} onChange={e => f('nom', e.target.value)} placeholder="Nom" />
+                </div>
+              </div>
+              <div className="crm-form-row">
+                <div className="form-field">
+                  <label>Téléphone</label>
+                  <input value={form.telephone} onChange={e => f('telephone', e.target.value)} placeholder="06 XX XX XX XX" />
+                </div>
+                <div className="form-field">
+                  <label>Email</label>
+                  <input type="email" value={form.email} onChange={e => f('email', e.target.value)} placeholder="email@exemple.com" />
+                </div>
+              </div>
+              <div className="crm-form-row">
+                <div className="form-field">
+                  <label>Enfant(s)</label>
+                  <input value={form.enfants} onChange={e => f('enfants', e.target.value)} placeholder="Prénom enfant, âge…" />
+                </div>
+                <div className="form-field">
+                  <label>Classe intéressée</label>
+                  <select value={form.classe_interessee} onChange={e => f('classe_interessee', e.target.value)}>
+                    <option value="">— Non précisé —</option>
+                    {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-field">
+                <label>Semaines intéressées</label>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {SEMAINES.map(s => (
+                    <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={form.semaines_interessees.includes(s.id)} onChange={() => toggleSemaine(s.id)} />
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="crm-form-row">
+                <div className="form-field">
+                  <label>Source</label>
+                  <select value={form.source} onChange={e => f('source', e.target.value)}>
+                    {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label>Statut</label>
+                  <select value={form.statut} onChange={e => f('statut', e.target.value)}>
+                    {Object.entries(STATUTS_VISITEUR).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-field">
+                <label>Notes</label>
+                <textarea value={form.notes} onChange={e => f('notes', e.target.value)} rows={3} placeholder="Notes libres…" style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: '0.88rem', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1.5px solid #e2e8f0', width: '100%' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                <button type="button" className="btn-refresh" style={{ borderRadius: '8px' }} onClick={() => setShowForm(false)}>Annuler</button>
+                <button type="submit" className="btn-submit" style={{ padding: '0.5rem 1.5rem' }} disabled={saving}>
+                  {saving ? '⏳' : editId ? '✅ Enregistrer' : '+ Ajouter'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Liste */}
+      {filtered.length === 0 ? (
+        <div className="admin-empty">Aucun visiteur trouvé.</div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Contact</th>
+                <th>Enfant(s)</th>
+                <th>Intérêt</th>
+                <th>Source</th>
+                <th>Notes</th>
+                <th>Statut</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(v => (
+                <tr key={v.id}>
+                  <td className="td-date">
+                    {new Date(v.created_at).toLocaleDateString('fr-FR')}<br />
+                    <span className="td-time">{new Date(v.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                      {v.telephone && <a href={waLink(v.telephone)} target="_blank" rel="noreferrer" className="crm-btn-icon crm-btn-wa" title="WhatsApp">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                      </a>}
+                      {v.email && <a href={`mailto:${v.email}`} className="crm-btn-icon crm-btn-email" title="Email">✉</a>}
+                      {v.telephone && <a href={`tel:${v.telephone}`} className="crm-btn-tel">📞</a>}
+                    </div>
+                    <strong style={{ fontSize: '0.88rem' }}>{v.prenom} {v.nom}</strong>
+                    {v.telephone && <div className="td-sub">{v.telephone}</div>}
+                    {v.email && <div className="td-sub">{v.email}</div>}
+                  </td>
+                  <td style={{ fontSize: '0.85rem' }}>{v.enfants || '—'}</td>
+                  <td>
+                    {v.classe_interessee && (
+                      <span className="td-classe" style={{ background: CLASSE_COLORS[v.classe_interessee]?.bg, color: CLASSE_COLORS[v.classe_interessee]?.color }}>
+                        {v.classe_interessee}
+                      </span>
+                    )}
+                    {v.semaines_interessees?.length > 0 && (
+                      <div className="td-sub">{v.semaines_interessees.map(s => `S${s}`).join(' ')}</div>
+                    )}
+                  </td>
+                  <td style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                    {SOURCES.find(s => s.value === v.source)?.label || v.source}
+                  </td>
+                  <td style={{ fontSize: '0.82rem', color: '#475569', maxWidth: 180 }}>
+                    {v.notes ? <span title={v.notes}>{v.notes.length > 60 ? v.notes.slice(0, 60) + '…' : v.notes}</span> : '—'}
+                  </td>
+                  <td>
+                    <select
+                      className="statut-select"
+                      value={v.statut}
+                      onChange={e => handleStatutChange(v.id, e.target.value)}
+                      style={{ background: STATUTS_VISITEUR[v.statut]?.bg, color: STATUTS_VISITEUR[v.statut]?.color }}
+                    >
+                      {Object.entries(STATUTS_VISITEUR).map(([k, sv]) => (
+                        <option key={k} value={k}>{sv.label}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="crm-btn-copy-sm" title="Modifier" onClick={() => openEdit(v)}>✏️</button>
+                      <button className="crm-btn-copy-sm" title="Supprimer" onClick={() => handleDelete(v.id)}>🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Onglet Par classe ─────────────────────────────────────────────────────────
 function TabClasses({ inscriptions }) {
   const [selectedClasse, setSelectedClasse] = useState('Pre Gan')
@@ -693,6 +955,7 @@ export default function Admin() {
     { id: 'familles',  label: `👨‍👩‍👧 Familles (${inscriptions.length})`, roles: ['admin'] },
     { id: 'classes',   label: '🏫 Par classe',                        roles: ['admin', 'animatrice'] },
     { id: 'whatsapp',  label: '💬 WhatsApp & Soldes',                  roles: ['admin'] },
+    { id: 'visiteurs', label: '👥 Visiteurs',                          roles: ['admin'] },
   ]
   const TABS = ALL_TABS.filter(t => t.roles.includes(role))
 
@@ -728,6 +991,7 @@ export default function Admin() {
         {tab === 'familles'  && role === 'admin' && <TabFamilles inscriptions={inscriptions} password={password} onStatutChange={handleStatutChange} />}
         {tab === 'classes'   && <TabClasses inscriptions={inscriptions} />}
         {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} />}
+        {tab === 'visiteurs' && role === 'admin' && <TabVisiteurs user={user} password={password} />}
       </div>
     </div>
   )
