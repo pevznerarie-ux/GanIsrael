@@ -1,16 +1,7 @@
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 import 'dotenv/config'
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  tls: { rejectUnauthorized: false },
-})
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 const SEMAINE_LABELS = { 1: '6–10 juillet', 2: '13–17 juillet', 3: '20–24 juillet' }
 const basePrice = (n) => n === 3 ? 525 : n * 180
@@ -39,8 +30,8 @@ export async function sendConfirmationToParent(data) {
 
   const modePaiementLabel = { especes_cheque: 'Espèces / Chèque', cb: 'Carte bancaire' }[modePaiement] || modePaiement
 
-  await transporter.sendMail({
-    from: `"Gan Israel Beth Hillel" <${process.env.SMTP_USER}>`,
+  await resend.emails.send({
+    from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: email,
     subject: "Confirmation d'inscription — Gan Israel Beth Hillel",
     html: `
@@ -136,8 +127,8 @@ export async function sendNotificationToAdmin(data, inscriptionId) {
       </td>
     </tr>`).join('')
 
-  await transporter.sendMail({
-    from: `"Gan Israel Site" <${process.env.SMTP_USER}>`,
+  await resend.emails.send({
+    from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: 'ganisrael@bethmenahem-lis.com',
     subject: `📋 Nouvelle inscription #${inscriptionId} — ${parent1Prenom} ${parent1Nom}`,
     html: `

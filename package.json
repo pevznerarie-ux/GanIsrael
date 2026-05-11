@@ -10,17 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "express": "^4.19.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "nodemailer": "^6.9.14"
+    "express": "^4.19.2",
+    "nodemailer": "^6.9.14",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "resend": "^6.12.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.2",
     "concurrently": "^9.0.0",
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "vite": "^5.4.2"
   }
 }
