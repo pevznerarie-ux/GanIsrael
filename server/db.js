@@ -165,6 +165,19 @@ export function updateStatut(id, statut) {
   save(db)
 }
 
+export function updateInscription(id, data) {
+  const db = load()
+  const item = db.inscriptions.find(i => i.id === +id)
+  if (item) Object.assign(item, data)
+  save(db)
+}
+
+export function deleteInscription(id) {
+  const db = load()
+  db.inscriptions = db.inscriptions.filter(i => i.id !== +id)
+  save(db)
+}
+
 // Compte les enfants par classe ET par semaine (ex: { 'Gan 1': { 1: 5, 2: 3 } })
 export function countByClasseAndSemaine() {
   const db = load()

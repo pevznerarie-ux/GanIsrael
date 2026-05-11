@@ -3,7 +3,7 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
+import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
 import { sendConfirmationToParent, sendNotificationToAdmin } from './email.js'
 
 const app = express()
@@ -273,6 +273,20 @@ app.post('/api/admin/inscriptions', (req, res) => {
     })
   }
   res.json({ ok: true, id })
+})
+
+// ── Admin — modifier une inscription (ajouter enfant, totaux…) ──────────────
+app.patch('/api/admin/inscriptions/:id', (req, res) => {
+  if (!authAdmin(req, res)) return
+  updateInscription(req.params.id, req.body)
+  res.json({ ok: true })
+})
+
+// ── Admin — supprimer une inscription ────────────────────────────────────────
+app.delete('/api/admin/inscriptions/:id', (req, res) => {
+  if (!authAdmin(req, res)) return
+  deleteInscription(req.params.id)
+  res.json({ ok: true })
 })
 
 // ── Admin — liste des inscriptions ───────────────────────────────────────────

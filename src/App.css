@@ -2045,6 +2045,26 @@ header, main, footer { position: relative; z-index: 1; }
 }
 
 /* Login — mot de passe visible + rester connecté */
+/* Boutons d'action sur les lignes */
+.crm-btn-action {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: none;
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.crm-btn-action:hover { opacity: 0.8; }
+.crm-btn-action-add     { background: #eff6ff; color: #1e40af; }
+.crm-btn-action-archive { background: #f1f5f9; color: #475569; }
+.crm-btn-action-delete  { background: #fee2e2; color: #dc2626; }
+
 .crm-pwd-wrap {
   position: relative;
   display: flex;

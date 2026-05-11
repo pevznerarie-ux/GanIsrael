@@ -5,6 +5,7 @@ const STATUTS = {
   accompte_paye: { label: 'Acompte payé',  color: '#2563eb', bg: '#dbeafe' },
   solde_paye:    { label: 'Soldé',         color: '#16a34a', bg: '#dcfce7' },
   annule:        { label: 'Annulé',        color: '#dc2626', bg: '#fee2e2' },
+  archive:       { label: 'Archivé',       color: '#94a3b8', bg: '#f1f5f9' },
 }
 
 const SEMAINES = [
@@ -332,10 +333,96 @@ function FormInscriptionManuelle({ user, password, onSaved, onClose }) {
   )
 }
 
-function TabFamilles({ inscriptions, user, password, onStatutChange, onInscriptionAdded }) {
+function FormAjoutEnfant({ inscription, user, password, onSaved, onClose }) {
+  const [enfant, setEnfant] = useState({ ...ENFANT_VIDE })
+  const [saving, setSaving] = useState(false)
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  const set = (f, v) => setEnfant(p => ({ ...p, [f]: v }))
+  const toggleSem = (s) => setEnfant(p => ({
+    ...p,
+    semaines: p.semaines.includes(s) ? p.semaines.filter(x => x !== s) : [...p.semaines, s]
+  }))
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    const nouveauxEnfants = [...inscription.enfants, enfant]
+    await fetch(`/api/admin/inscriptions/${inscription.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ enfants: nouveauxEnfants }),
+    })
+    onSaved()
+    setSaving(false)
+    onClose()
+  }
+
+  return (
+    <div className="crm-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="crm-modal" style={{ maxWidth: 500 }}>
+        <div className="crm-modal-header">
+          <strong>👶 Ajouter un enfant — {inscription.parent1_prenom} {inscription.parent1_nom}</strong>
+          <button className="crm-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSave} className="crm-modal-body">
+          <div className="crm-form-row">
+            <div className="form-field"><label>Prénom *</label><input required value={enfant.prenom} onChange={e => set('prenom', e.target.value)} placeholder="Prénom" autoFocus /></div>
+            <div className="form-field"><label>Nom *</label><input required value={enfant.nom} onChange={e => set('nom', e.target.value)} placeholder="Nom" /></div>
+          </div>
+          <div className="crm-form-row">
+            <div className="form-field">
+              <label>Classe *</label>
+              <select value={enfant.classe} onChange={e => set('classe', e.target.value)}>
+                {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="form-field"><label>Date de naissance</label><input type="date" value={enfant.dateNaissance} onChange={e => set('dateNaissance', e.target.value)} /></div>
+          </div>
+          <div className="form-field">
+            <label>Semaines *</label>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {SEMAINES.map(s => (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={enfant.semaines.includes(s.id)} onChange={() => toggleSem(s.id)} />
+                  {s.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button type="button" className="btn-refresh" style={{ borderRadius: 8 }} onClick={onClose}>Annuler</button>
+            <button type="submit" className="btn-submit" style={{ padding: '0.5rem 1.5rem' }} disabled={saving || enfant.semaines.length === 0}>
+              {saving ? '⏳' : '✅ Ajouter l\'enfant'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function TabFamilles({ inscriptions, user, password, onStatutChange, onInscriptionAdded, onInscriptionDeleted, onInscriptionUpdated }) {
   const [filter, setFilter] = useState('tous')
   const [search, setSearch] = useState('')
   const [showSaisie, setShowSaisie] = useState(false)
+  const [addEnfantTo, setAddEnfantTo] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
+
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  const handleDelete = async (id) => {
+    await fetch(`/api/admin/inscriptions/${id}`, { method: 'DELETE', headers })
+    onInscriptionDeleted(id)
+    setConfirmDelete(null)
+  }
+
+  const handleArchive = async (id) => {
+    await fetch(`/api/admin/inscriptions/${id}/statut`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ statut: 'archive' }),
+    })
+    onStatutChange(id, 'archive')
+  }
 
   const filtered = useMemo(() => {
     let list = filter === 'tous' ? inscriptions : inscriptions.filter(i => i.statut === filter)
@@ -353,13 +440,34 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
 
   return (
     <div>
-      {showSaisie && (
-        <FormInscriptionManuelle
-          user={user} password={password}
-          onSaved={onInscriptionAdded}
-          onClose={() => setShowSaisie(false)}
-        />
+      {showSaisie && <FormInscriptionManuelle user={user} password={password} onSaved={onInscriptionAdded} onClose={() => setShowSaisie(false)} />}
+      {addEnfantTo && <FormAjoutEnfant inscription={addEnfantTo} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setAddEnfantTo(null)} />}
+
+      {/* Modale confirmation suppression */}
+      {confirmDelete && (
+        <div className="crm-modal-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="crm-modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="crm-modal-header" style={{ background: '#fee2e2' }}>
+              <strong style={{ color: '#dc2626' }}>⚠️ Supprimer définitivement</strong>
+              <button className="crm-modal-close" onClick={() => setConfirmDelete(null)}>✕</button>
+            </div>
+            <div className="crm-modal-body">
+              <p style={{ color: '#475569', marginBottom: '1rem' }}>
+                Tu es sur le point de supprimer définitivement l'inscription de<br />
+                <strong style={{ color: '#1e3a8a' }}>{confirmDelete.parent1_prenom} {confirmDelete.parent1_nom}</strong> (#{confirmDelete.id}).<br />
+                <span style={{ color: '#dc2626', fontSize: '0.85rem' }}>Cette action est irréversible.</span>
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button className="btn-refresh" style={{ borderRadius: 8 }} onClick={() => setConfirmDelete(null)}>Annuler</button>
+                <button onClick={() => handleDelete(confirmDelete.id)} style={{ padding: '0.5rem 1.2rem', background: '#dc2626', color: 'white', border: 'none', borderRadius: 8, fontFamily: 'inherit', fontWeight: 700, cursor: 'pointer' }}>
+                  🗑 Supprimer définitivement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
+
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="btn-submit" style={{ padding: '0.5rem 1.2rem', fontSize: '0.88rem', whiteSpace: 'nowrap' }} onClick={() => setShowSaisie(true)}>
           + Saisie manuelle
@@ -395,6 +503,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                 <th>Paiement</th>
                 <th>Total / Solde</th>
                 <th>Statut</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -455,6 +564,19 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                           <option key={k} value={k}>{v.label}</option>
                         ))}
                       </select>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4, flexDirection: 'column' }}>
+                        <button className="crm-btn-action crm-btn-action-add" onClick={() => setAddEnfantTo(i)} title="Ajouter un enfant">
+                          👶 Enfant
+                        </button>
+                        <button className="crm-btn-action crm-btn-action-archive" onClick={() => handleArchive(i.id)} title="Archiver">
+                          📦 Archiver
+                        </button>
+                        <button className="crm-btn-action crm-btn-action-delete" onClick={() => setConfirmDelete(i)} title="Supprimer">
+                          🗑 Supprimer
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -1394,7 +1516,13 @@ export default function Admin() {
 
       <div className="admin-body">
         {tab === 'dashboard' && role === 'admin' && <TabDashboard inscriptions={inscriptions} />}
-        {tab === 'familles'  && role === 'admin' && <TabFamilles inscriptions={inscriptions} user={user} password={password} onStatutChange={handleStatutChange} onInscriptionAdded={() => fetchInscriptions(user, password)} />}
+        {tab === 'familles'  && role === 'admin' && <TabFamilles
+          inscriptions={inscriptions} user={user} password={password}
+          onStatutChange={handleStatutChange}
+          onInscriptionAdded={() => fetchInscriptions(user, password)}
+          onInscriptionDeleted={(id) => setInscriptions(prev => prev.filter(i => i.id !== id))}
+          onInscriptionUpdated={() => fetchInscriptions(user, password)}
+        />}
         {tab === 'classes'   && <TabClasses inscriptions={inscriptions} />}
         {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} />}
         {tab === 'analytics' && role === 'admin' && <TabAnalytics user={user} password={password} />}
