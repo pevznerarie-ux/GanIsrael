@@ -3,7 +3,7 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur } from './db.js'
+import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics } from './db.js'
 import { sendConfirmationToParent, sendNotificationToAdmin } from './email.js'
 
 const app = express()
@@ -11,6 +11,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 app.use(express.json())
 app.use(cors({ origin: /localhost/ }))
+
+// ── Tracking des visites (pages HTML uniquement) ──────────────────────────────
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.match(/\.(js|css|png|ico|svg|woff|map)$/)) {
+    const ip = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim()
+    recordVisit({ path: req.path || '/', referer: req.headers.referer || '', ip })
+  }
+  next()
+})
 
 const HA_BASE = 'https://api.helloasso.com'
 
@@ -246,6 +255,12 @@ app.get('/api/admin/inscriptions', (req, res) => {
   if (!authAdmin(req, res)) return
   const rows = getAllInscriptions()
   res.json(rows)
+})
+
+// ── Admin — analytics ────────────────────────────────────────────────────────
+app.get('/api/admin/analytics', (req, res) => {
+  if (!authAdmin(req, res)) return
+  res.json(getAnalytics())
 })
 
 // ── Admin — visiteurs ─────────────────────────────────────────────────────────

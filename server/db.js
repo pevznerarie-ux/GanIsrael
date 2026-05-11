@@ -70,6 +70,46 @@ export function deleteVisiteur(id) {
   saveVisiteurs(db)
 }
 
+// ── Analytics ────────────────────────────────────────────────────────────────
+const analyticsFile = join(dbDir, 'analytics.json')
+
+function loadAnalytics() {
+  try { return JSON.parse(readFileSync(analyticsFile, 'utf8')) }
+  catch { return { days: {} } }
+}
+
+function saveAnalytics(data) {
+  writeFileSync(analyticsFile, JSON.stringify(data, null, 2), 'utf8')
+}
+
+function getSource(referer) {
+  if (!referer) return 'direct'
+  if (/google\.|bing\.|yahoo\.|duckduckgo\./.test(referer)) return 'moteur'
+  if (/facebook\.|instagram\.|tiktok\.|twitter\.|linkedin\./.test(referer)) return 'reseaux'
+  if (/whatsapp\./.test(referer)) return 'whatsapp'
+  return 'autre'
+}
+
+export function recordVisit({ path, referer, ip }) {
+  const db = loadAnalytics()
+  const today = new Date().toISOString().slice(0, 10)
+  if (!db.days[today]) db.days[today] = { views: 0, uniques: [], pages: {}, sources: {} }
+  const day = db.days[today]
+  day.views++
+  if (!day.uniques.includes(ip)) day.uniques.push(ip)
+  day.pages[path] = (day.pages[path] || 0) + 1
+  const src = getSource(referer)
+  day.sources[src] = (day.sources[src] || 0) + 1
+  // Garder seulement les 90 derniers jours
+  const keys = Object.keys(db.days).sort()
+  if (keys.length > 90) delete db.days[keys[0]]
+  saveAnalytics(db)
+}
+
+export function getAnalytics() {
+  return loadAnalytics()
+}
+
 export function insertInscription(data) {
   const db = load()
   const id = db.nextId++

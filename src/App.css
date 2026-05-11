@@ -1907,6 +1907,48 @@ header, main, footer { position: relative; z-index: 1; }
 }
 .crm-group-body { padding: 0.75rem 0.9rem; }
 
+/* Graphe analytics */
+.crm-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 120px;
+  padding-bottom: 24px;
+  overflow-x: auto;
+}
+.crm-chart-bar-wrap {
+  flex: 1;
+  min-width: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  position: relative;
+}
+.crm-chart-bar-inner {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.crm-chart-bar-fill {
+  width: 100%;
+  background: #2563eb;
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+  transition: height 0.3s ease;
+}
+.crm-chart-bar-fill:hover { background: #1d4ed8; }
+.crm-chart-label {
+  position: absolute;
+  bottom: -20px;
+  font-size: 0.62rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  transform: rotate(-40deg);
+  transform-origin: top center;
+}
+
 /* Modal visiteurs */
 .crm-modal-overlay {
   position: fixed;

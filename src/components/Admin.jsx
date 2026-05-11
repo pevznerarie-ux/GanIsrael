@@ -324,6 +324,157 @@ function TabFamilles({ inscriptions, password, onStatutChange }) {
   )
 }
 
+// ── Onglet Analytics ─────────────────────────────────────────────────────────
+const SOURCE_LABELS = {
+  direct:  { label: 'Accès direct',       icon: '🔗' },
+  moteur:  { label: 'Moteur de recherche', icon: '🔍' },
+  reseaux: { label: 'Réseaux sociaux',     icon: '📱' },
+  whatsapp:{ label: 'WhatsApp',            icon: '💬' },
+  autre:   { label: 'Autre site',          icon: '🌐' },
+}
+
+const PAGE_LABELS = {
+  '/':        'Accueil',
+  '/inscription': 'Inscription',
+  '/admin':   'Admin',
+}
+
+function TabAnalytics({ user, password }) {
+  const [data, setData] = useState(null)
+  const [periode, setPeriode] = useState(30)
+
+  const headers = { 'x-admin-user': user, 'x-admin-password': password }
+
+  useEffect(() => {
+    fetch('/api/admin/analytics', { headers })
+      .then(r => r.json())
+      .then(setData)
+  }, [])
+
+  const stats = useMemo(() => {
+    if (!data) return null
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - periode)
+    const cutoffStr = cutoff.toISOString().slice(0, 10)
+
+    const days = Object.entries(data.days)
+      .filter(([d]) => d >= cutoffStr)
+      .sort(([a], [b]) => a.localeCompare(b))
+
+    const totalViews   = days.reduce((s, [, d]) => s + d.views, 0)
+    const totalUniques = days.reduce((s, [, d]) => s + d.uniques.length, 0)
+
+    const pages = {}
+    const sources = {}
+    for (const [, d] of days) {
+      for (const [p, n] of Object.entries(d.pages || {})) pages[p] = (pages[p] || 0) + n
+      for (const [s, n] of Object.entries(d.sources || {})) sources[s] = (sources[s] || 0) + n
+    }
+
+    const topPages = Object.entries(pages).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    const topSources = Object.entries(sources).sort((a, b) => b[1] - a[1])
+
+    // Série temporelle pour le graphe (barres SVG)
+    const maxViews = Math.max(...days.map(([, d]) => d.views), 1)
+
+    return { days, totalViews, totalUniques, topPages, topSources, maxViews }
+  }, [data, periode])
+
+  if (!data) return <div className="admin-empty">Chargement…</div>
+
+  const today = new Date().toISOString().slice(0, 10)
+  const todayData = data.days[today] || { views: 0, uniques: [] }
+
+  return (
+    <div>
+      {/* Stats du jour */}
+      <div className="admin-stats" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: '1rem' }}>
+        {[
+          { label: "Vues aujourd'hui",    value: todayData.views,           icon: '👁' },
+          { label: "Visiteurs uniques aujourd'hui", value: todayData.uniques.length, icon: '🧑' },
+          { label: `Vues (${periode}j)`,  value: stats?.totalViews ?? 0,    icon: '📈' },
+          { label: `Uniques (${periode}j)`,value: stats?.totalUniques ?? 0, icon: '👥' },
+        ].map(s => (
+          <div key={s.label} className="admin-stat-card">
+            <div className="asc-icon">{s.icon}</div>
+            <div className="asc-value">{s.value}</div>
+            <div className="asc-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Sélecteur de période */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        {[7, 14, 30, 60, 90].map(p => (
+          <button key={p} className={`admin-filter-btn ${periode === p ? 'active' : ''}`} onClick={() => setPeriode(p)}>
+            {p} jours
+          </button>
+        ))}
+      </div>
+
+      {/* Graphe barres */}
+      {stats && stats.days.length > 0 && (
+        <div className="crm-card" style={{ marginBottom: '1rem' }}>
+          <div className="crm-card-title">Visites par jour</div>
+          <div className="crm-chart">
+            {stats.days.map(([date, d]) => {
+              const pct = (d.views / stats.maxViews) * 100
+              const label = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+              return (
+                <div key={date} className="crm-chart-bar-wrap" title={`${label} : ${d.views} vues, ${d.uniques.length} uniques`}>
+                  <div className="crm-chart-bar-inner">
+                    <div className="crm-chart-bar-fill" style={{ height: `${Math.max(4, pct)}%` }} />
+                  </div>
+                  {stats.days.length <= 14 && (
+                    <div className="crm-chart-label">{label}</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="crm-dash-grid">
+        {/* Top pages */}
+        <div className="crm-card">
+          <div className="crm-card-title">Pages les plus visitées</div>
+          {stats?.topPages.length === 0 && <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Aucune donnée</div>}
+          {stats?.topPages.map(([page, count]) => (
+            <div key={page} className="crm-statut-row">
+              <span style={{ fontSize: '0.85rem', color: '#475569', flex: 1 }}>
+                {PAGE_LABELS[page] || page}
+              </span>
+              <span className="crm-statut-count">{count}</span>
+              <div className="crm-bar-bg">
+                <div className="crm-bar-fill" style={{ width: `${(count / (stats.topPages[0]?.[1] || 1)) * 100}%`, background: '#2563eb' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Sources */}
+        <div className="crm-card">
+          <div className="crm-card-title">Sources de trafic</div>
+          {stats?.topSources.length === 0 && <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Aucune donnée</div>}
+          {stats?.topSources.map(([src, count]) => {
+            const s = SOURCE_LABELS[src] || { label: src, icon: '🌐' }
+            return (
+              <div key={src} className="crm-statut-row">
+                <span style={{ fontSize: '0.85rem', color: '#475569', flex: 1 }}>{s.icon} {s.label}</span>
+                <span className="crm-statut-count">{count}</span>
+                <div className="crm-bar-bg">
+                  <div className="crm-bar-fill" style={{ width: `${(count / (stats.topSources[0]?.[1] || 1)) * 100}%`, background: '#7c3aed' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Onglet Visiteurs ─────────────────────────────────────────────────────────
 const STATUTS_VISITEUR = {
   a_rappeler:  { label: 'À rappeler',   color: '#f59e0b', bg: '#fef3c7' },
@@ -955,7 +1106,8 @@ export default function Admin() {
     { id: 'familles',  label: `👨‍👩‍👧 Familles (${inscriptions.length})`, roles: ['admin'] },
     { id: 'classes',   label: '🏫 Par classe',                        roles: ['admin', 'animatrice'] },
     { id: 'whatsapp',  label: '💬 WhatsApp & Soldes',                  roles: ['admin'] },
-    { id: 'visiteurs', label: '👥 Visiteurs',                          roles: ['admin'] },
+    { id: 'analytics', label: '📈 Trafic site',                        roles: ['admin'] },
+    { id: 'visiteurs', label: '👥 Contacts',                           roles: ['admin'] },
   ]
   const TABS = ALL_TABS.filter(t => t.roles.includes(role))
 
@@ -991,6 +1143,7 @@ export default function Admin() {
         {tab === 'familles'  && role === 'admin' && <TabFamilles inscriptions={inscriptions} password={password} onStatutChange={handleStatutChange} />}
         {tab === 'classes'   && <TabClasses inscriptions={inscriptions} />}
         {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} />}
+        {tab === 'analytics' && role === 'admin' && <TabAnalytics user={user} password={password} />}
         {tab === 'visiteurs' && role === 'admin' && <TabVisiteurs user={user} password={password} />}
       </div>
     </div>
