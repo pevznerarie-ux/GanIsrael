@@ -1075,52 +1075,70 @@ function TabWhatsapp({ inscriptions }) {
 
 // ── Composant principal Admin ─────────────────────────────────────────────────
 export default function Admin() {
-  const [user, setUser]         = useState(localStorage.getItem('admin_user') || '')
-  const [password, setPassword] = useState(localStorage.getItem('admin_pwd') || '')
+  const saved = localStorage.getItem('admin_user')
+    ? { user: localStorage.getItem('admin_user'), pwd: localStorage.getItem('admin_pwd'), remember: true }
+    : sessionStorage.getItem('admin_user')
+    ? { user: sessionStorage.getItem('admin_user'), pwd: sessionStorage.getItem('admin_pwd'), remember: false }
+    : null
+
+  const [user, setUser]         = useState(saved?.user || '')
+  const [password, setPassword] = useState(saved?.pwd || '')
+  const [showPwd, setShowPwd]   = useState(false)
+  const [remember, setRemember] = useState(saved?.remember ?? true)
   const [role, setRole]         = useState(null)
   const [inscriptions, setInscriptions] = useState([])
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [tab, setTab]           = useState('classes')
 
+  // Auto-login si identifiants sauvegardés
+  useEffect(() => {
+    if (saved?.user && saved?.pwd) doLogin(saved.user, saved.pwd, saved.remember)
+  }, [])
+
   const fetchInscriptions = async (u, pwd) => {
-    setLoading(true)
-    setError('')
     try {
       const res = await fetch('/api/admin/inscriptions', {
         headers: { 'x-admin-user': u, 'x-admin-password': pwd },
       })
-      if (res.status === 401) { setError('Identifiants incorrects'); setLoading(false); return }
+      if (!res.ok) return
       const data = await res.json()
       setInscriptions(data)
-    } catch {
-      setError('Erreur de connexion au serveur')
-    }
-    setLoading(false)
+    } catch {}
   }
 
-  const handleLogin = async (e) => {
-    e.preventDefault()
+  const doLogin = async (u, pwd, rem) => {
     setLoading(true)
     setError('')
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user, password }),
+        body: JSON.stringify({ user: u, password: pwd }),
       })
       if (res.status === 401) { setError('Identifiants incorrects'); setLoading(false); return }
       const { role: r } = await res.json()
       setRole(r)
-      localStorage.setItem('admin_user', user)
-      localStorage.setItem('admin_pwd', password)
+      if (rem) {
+        localStorage.setItem('admin_user', u)
+        localStorage.setItem('admin_pwd', pwd)
+        sessionStorage.removeItem('admin_user')
+        sessionStorage.removeItem('admin_pwd')
+      } else {
+        sessionStorage.setItem('admin_user', u)
+        sessionStorage.setItem('admin_pwd', pwd)
+        localStorage.removeItem('admin_user')
+        localStorage.removeItem('admin_pwd')
+      }
       setTab(r === 'admin' ? 'dashboard' : 'classes')
-      await fetchInscriptions(user, password)
+      await fetchInscriptions(u, pwd)
     } catch {
       setError('Erreur de connexion au serveur')
     }
     setLoading(false)
   }
+
+  const handleLogin = (e) => { e.preventDefault(); doLogin(user, password, remember) }
 
   const handleStatutChange = async (id, statut) => {
     await fetch(`/api/admin/inscriptions/${id}/statut`, {
@@ -1134,6 +1152,8 @@ export default function Admin() {
   const handleLogout = () => {
     localStorage.removeItem('admin_user')
     localStorage.removeItem('admin_pwd')
+    sessionStorage.removeItem('admin_user')
+    sessionStorage.removeItem('admin_pwd')
     setRole(null)
     setUser('')
     setPassword('')
@@ -1158,21 +1178,30 @@ export default function Admin() {
                 onChange={e => setUser(e.target.value)}
                 placeholder="Nom d'utilisateur"
                 required
-                autoFocus
+                autoFocus={!saved}
                 autoComplete="username"
               />
             </div>
             <div className="form-field">
               <label>Mot de passe</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Mot de passe"
-                required
-                autoComplete="current-password"
-              />
+              <div className="crm-pwd-wrap">
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Mot de passe"
+                  required
+                  autoComplete="current-password"
+                />
+                <button type="button" className="crm-pwd-toggle" onClick={() => setShowPwd(v => !v)} tabIndex={-1}>
+                  {showPwd ? '🙈' : '👁'}
+                </button>
+              </div>
             </div>
+            <label className="crm-remember">
+              <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+              Rester connecté
+            </label>
             {error && <div className="error-msg">{error}</div>}
             <button type="submit" className="btn-submit" disabled={loading}>
               {loading ? '⏳ Connexion…' : '🔐 Se connecter'}
