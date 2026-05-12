@@ -4,6 +4,7 @@ import Header from './components/Header'
 import Hero from './components/Hero'
 import PricingGrid from './components/PricingGrid'
 import InscriptionForm from './components/InscriptionForm'
+import Programme from './components/Programme'
 import Footer from './components/Footer'
 import Admin from './components/Admin'
 import ThankYou from './components/ThankYou'
@@ -40,6 +41,7 @@ export default function App() {
       <main>
         <Hero />
         <PricingGrid />
+        <Programme />
         <InscriptionForm />
       </main>
       <Footer />

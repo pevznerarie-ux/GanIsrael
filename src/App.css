@@ -1317,6 +1317,191 @@ header, main, footer { position: relative; z-index: 1; }
   font-weight: 600;
 }
 
+.pregan-warning {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: #dc2626;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ── Programme section ── */
+.programme-section {
+  padding: 4rem 1.5rem;
+  background: #f8faff;
+}
+
+.programme-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.programme-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.programme-eyebrow {
+  display: inline-block;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.3rem 1rem;
+  border-radius: 999px;
+  margin-bottom: 0.75rem;
+}
+
+.programme-title {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
+  color: #0b1d4a;
+  margin: 0;
+}
+
+.programme-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .programme-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.programme-card {
+  background: #fff;
+  border-radius: 1.2rem;
+  padding: 1.75rem;
+  box-shadow: 0 2px 16px rgba(59,130,246,0.09);
+  border: 1px solid rgba(99,102,241,0.08);
+}
+
+.programme-card-icon {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.programme-card-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0b1d4a;
+  margin: 0 0 1rem;
+}
+
+.programme-horaires {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.programme-horaires li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.6rem 0.9rem;
+  background: #f0f4ff;
+  border-radius: 0.6rem;
+}
+
+.horaire-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6366f1;
+}
+
+.horaire-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0b1d4a;
+}
+
+.horaire-value em {
+  font-style: normal;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.programme-text {
+  font-size: 0.9rem;
+  color: #334155;
+  line-height: 1.6;
+  margin: 0 0 1rem;
+}
+
+.programme-sorties {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 1.25rem 0;
+}
+
+.sortie-block {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.sortie-gan {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.sortie-pregan {
+  background: #fef9f0;
+  border: 1px solid #fde68a;
+}
+
+.sortie-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.sortie-block strong {
+  display: block;
+  font-weight: 700;
+  color: #0b1d4a;
+  margin-bottom: 0.2rem;
+}
+
+.sortie-block p {
+  margin: 0;
+  color: #475569;
+}
+
+.sortie-lieux {
+  margin-top: 0.3rem !important;
+  font-size: 0.8rem;
+  color: #6366f1 !important;
+  font-style: italic;
+}
+
+.programme-detail-note {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border-left: 3px solid #3b82f6;
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-size: 0.88rem;
+  color: #1e3a5f;
+  line-height: 1.5;
+}
+
 /* ── Footer ── */
 .footer {
   background: linear-gradient(180deg, #0b1d4a 0%, #071230 100%);

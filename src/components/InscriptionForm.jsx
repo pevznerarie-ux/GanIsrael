@@ -332,6 +332,9 @@ export default function InscriptionForm() {
                   {child.classe && classeCompletePartout(child.classe) && (
                     <span className="classe-complet-msg">Cette classe est complète.</span>
                   )}
+                  {isPregan(child.classe) && (
+                    <span className="pregan-warning">⚠️ Seuls les enfants scolarisés à l'école Beth Hillel seront acceptés dans la classe du Pré-Gan.</span>
+                  )}
                 </div>
               </div>
 
