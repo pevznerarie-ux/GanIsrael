@@ -2247,6 +2247,10 @@ header, main, footer { position: relative; z-index: 1; }
 }
 .crm-btn-action:hover { opacity: 0.8; }
 .crm-btn-action-add     { background: #eff6ff; color: #1e40af; }
+.crm-btn-action-receipt { background: #f0fdf4; color: #15803d; }
+.crm-btn-action-receipt--ok    { background: #dcfce7; color: #15803d; }
+.crm-btn-action-receipt--error { background: #fee2e2; color: #dc2626; }
+.crm-btn-action-receipt:disabled { opacity: 0.6; cursor: not-allowed; }
 .crm-btn-action-archive { background: #f1f5f9; color: #475569; }
 .crm-btn-action-delete  { background: #fee2e2; color: #dc2626; }
 

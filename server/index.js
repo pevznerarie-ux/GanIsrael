@@ -4,7 +4,8 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
 import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
-import { sendConfirmationToParent, sendNotificationToAdmin } from './email.js'
+import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent } from './email.js'
+import { generateReceiptPDF } from './receipt.js'
 
 const app = express()
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -356,6 +357,27 @@ app.delete('/api/admin/visiteurs/:id', (req, res) => {
   if (!authAdmin(req, res)) return
   deleteVisiteur(req.params.id)
   res.json({ ok: true })
+})
+
+// ── Admin — envoyer le reçu PDF par email ────────────────────────────────────
+app.post('/api/admin/inscriptions/:id/send-receipt', async (req, res) => {
+  if (!authAdmin(req, res)) return
+
+  const inscription = getInscription(req.params.id)
+  if (!inscription) return res.status(404).json({ error: 'Inscription introuvable' })
+
+  const data = inscription.formData
+  if (!data) return res.status(500).json({ error: 'Données manquantes' })
+
+  try {
+    const pdfBuffer = await generateReceiptPDF(inscription, inscription.id)
+    await sendReceiptToParent(data, inscription.id, pdfBuffer)
+    console.log(`[Reçu] ✓ Envoyé à ${data.email} pour inscription #${inscription.id}`)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[Reçu] ✗ ERREUR:', err.message)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // ── Admin — mise à jour statut ────────────────────────────────────────────────

@@ -407,8 +407,27 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
   const [showSaisie, setShowSaisie] = useState(false)
   const [addEnfantTo, setAddEnfantTo] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [sendingReceipt, setSendingReceipt] = useState({})
+  const [receiptFeedback, setReceiptFeedback] = useState({})
 
   const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  const handleSendReceipt = async (id) => {
+    setSendingReceipt(prev => ({ ...prev, [id]: true }))
+    setReceiptFeedback(prev => ({ ...prev, [id]: null }))
+    try {
+      const res = await fetch(`/api/admin/inscriptions/${id}/send-receipt`, {
+        method: 'POST', headers,
+      })
+      if (!res.ok) throw new Error()
+      setReceiptFeedback(prev => ({ ...prev, [id]: 'ok' }))
+    } catch {
+      setReceiptFeedback(prev => ({ ...prev, [id]: 'error' }))
+    } finally {
+      setSendingReceipt(prev => ({ ...prev, [id]: false }))
+      setTimeout(() => setReceiptFeedback(prev => ({ ...prev, [id]: null })), 4000)
+    }
+  }
 
   const handleDelete = async (id) => {
     await fetch(`/api/admin/inscriptions/${id}`, { method: 'DELETE', headers })
@@ -569,6 +588,20 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                       <div style={{ display: 'flex', gap: 4, flexDirection: 'column' }}>
                         <button className="crm-btn-action crm-btn-action-add" onClick={() => setAddEnfantTo(i)} title="Ajouter un enfant">
                           👶 Enfant
+                        </button>
+                        <button
+                          className={`crm-btn-action crm-btn-action-receipt${receiptFeedback[i.id] === 'ok' ? ' crm-btn-action-receipt--ok' : receiptFeedback[i.id] === 'error' ? ' crm-btn-action-receipt--error' : ''}`}
+                          onClick={() => handleSendReceipt(i.id)}
+                          disabled={!!sendingReceipt[i.id]}
+                          title="Envoyer le reçu PDF par email"
+                        >
+                          {sendingReceipt[i.id]
+                            ? '⏳ Envoi…'
+                            : receiptFeedback[i.id] === 'ok'
+                            ? '✅ Envoyé !'
+                            : receiptFeedback[i.id] === 'error'
+                            ? '❌ Erreur'
+                            : '📄 Reçu'}
                         </button>
                         <button className="crm-btn-action crm-btn-action-archive" onClick={() => handleArchive(i.id)} title="Archiver">
                           📦 Archiver
