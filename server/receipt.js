@@ -1,28 +1,48 @@
 import PDFDocument from 'pdfkit'
+import fs from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 
-const SEMAINE_LABELS = {
-  1: '6-10 juillet',
-  2: '13-17 juillet',
-  3: '20-24 juillet',
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const LOGO_PATH      = join(__dirname, 'assets', 'logo.png')
+const SIGNATURE_PATH = join(__dirname, 'assets', 'signature.png')
+
+// ── Montant en lettres (français) ─────────────────────────────────────────────
+const ONES = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf',
+              'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize',
+              'dix-sept', 'dix-huit', 'dix-neuf']
+const TENS = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante']
+
+function below100(n) {
+  if (n === 0) return ''
+  if (n < 20) return ONES[n]
+  const d = Math.floor(n / 10), u = n % 10
+  if (d === 7) return 'soixante-' + ONES[10 + u]
+  if (d === 8) return u === 0 ? 'quatre-vingts' : 'quatre-vingt-' + ONES[u]
+  if (d === 9) return 'quatre-vingt-' + ONES[10 + u]
+  const liaison = u === 1 ? ' et ' : u > 0 ? '-' : ''
+  return TENS[d] + liaison + (u > 0 ? ONES[u] : '')
 }
 
-const basePrice = (n) => n === 3 ? 525 : n * 180
-const garderiePrice = (garderie) => (garderie?.length || 0) * 20
-const totalForChild = (e) => basePrice(e.semaines.length) + garderiePrice(e.garderie)
-
-// ── Helpers de dessin ─────────────────────────────────────────────────────────
-function drawTwoCol(doc, label, value, y, valueColor = '#1e293b', bold = false) {
-  doc.fillColor('#64748b').font('Helvetica').fontSize(10)
-     .text(label, 55, y, { lineBreak: false })
-  doc.fillColor(valueColor).font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10)
-     .text(value, 220, y, { lineBreak: false })
+function below1000(n) {
+  if (n === 0) return ''
+  if (n < 100) return below100(n)
+  const h = Math.floor(n / 100), r = n % 100
+  const cent = h === 1 ? 'cent' : ONES[h] + ' cent' + (r === 0 ? 's' : '')
+  return cent + (r > 0 ? ' ' + below100(r) : '')
 }
 
-function drawFinRow(doc, label, value, y, valueColor = '#1e293b') {
-  doc.fillColor('#64748b').font('Helvetica').fontSize(11)
-     .text(label, 55, y, { lineBreak: false })
-  doc.fillColor(valueColor).font('Helvetica-Bold').fontSize(11)
-     .text(value, 310, y, { width: 230, align: 'right', lineBreak: false })
+function amountToWords(n) {
+  if (!n || n === 0) return 'Zéro euro'
+  let result = ''
+  if (n >= 1000) {
+    const t = Math.floor(n / 1000), r = n % 1000
+    result = (t === 1 ? 'mille' : below1000(t) + ' mille') + (r > 0 ? ' ' + below1000(r) : '')
+  } else {
+    result = below1000(n)
+  }
+  const cap = result.charAt(0).toUpperCase() + result.slice(1)
+  return cap + (n > 1 ? ' euros' : ' euro')
 }
 
 // ── Génération du PDF ─────────────────────────────────────────────────────────
@@ -34,145 +54,137 @@ export function generateReceiptPDF(inscription, id) {
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    const data = inscription.formData || inscription
-    const {
-      parent1Prenom, parent1Nom,
-      parent2Prenom, parent2Nom,
-      email, telephone,
-      enfants, total, accompte,
-    } = data
-    const solde = (total || 0) - (accompte || 0)
+    const data   = inscription.formData || inscription
+    const { parent1Prenom, parent1Nom, parent2Prenom, parent2Nom,
+            enfants, total, accompte } = data
+    const amount = accompte || total || 0
 
-    // ── En-tête bleu ────────────────────────────────────────────────────────
-    doc.rect(0, 0, 595.28, 90).fill('#1e3a8a')
-
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(19)
-       .text('Gan Israel Beth Hillel', 50, 20, { lineBreak: false })
-
-    doc.fillColor('#93c5fd').font('Helvetica').fontSize(11)
-       .text('Centre Aere Maternelle - Levallois-Perret', 50, 44, { lineBreak: false })
-
-    doc.fillColor('#bfdbfe').fontSize(9)
-       .text('89 rue Carnot, 92300 Levallois-Perret  |  ganisrael@bethmenahem-lis.com', 50, 62, { lineBreak: false })
-
-    // ── Titre + numéro ───────────────────────────────────────────────────────
-    let y = 108
-    doc.fillColor('#1e3a8a').font('Helvetica-Bold').fontSize(20)
-       .text('RECU D\'INSCRIPTION', 50, y, { align: 'center', width: 495.28 })
-
-    y += 28
-    const dateEmis = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
-    doc.fillColor('#64748b').font('Helvetica').fontSize(11)
-       .text(`N ${id}  |  Emis le : ${dateEmis}`, 50, y, { align: 'center', width: 495.28 })
-
-    // Séparateur
-    y += 22
-    doc.moveTo(50, y).lineTo(545.28, y).strokeColor('#dbeafe').lineWidth(1.5).stroke()
-    y += 16
-
-    // ── Famille ─────────────────────────────────────────────────────────────
-    doc.fillColor('#1e3a8a').font('Helvetica-Bold').fontSize(11)
-       .text('FAMILLE', 50, y, { lineBreak: false })
-    y += 14
-
-    drawTwoCol(doc, 'Parent 1 :', `${parent1Prenom} ${parent1Nom}`, y, '#1e293b', true); y += 16
-    if (parent2Prenom) {
-      drawTwoCol(doc, 'Parent 2 :', `${parent2Prenom} ${parent2Nom}`, y, '#1e293b', true); y += 16
-    }
-    drawTwoCol(doc, 'Email :', email, y); y += 16
-    drawTwoCol(doc, 'Telephone :', telephone || '—', y); y += 20
-
-    // Séparateur
-    doc.moveTo(50, y).lineTo(545.28, y).strokeColor('#dbeafe').lineWidth(1.5).stroke()
-    y += 16
-
-    // ── Tableau enfants ──────────────────────────────────────────────────────
-    doc.fillColor('#1e3a8a').font('Helvetica-Bold').fontSize(11)
-       .text('DETAIL DES INSCRIPTIONS', 50, y, { lineBreak: false })
-    y += 10
-
-    const tX = 50
-    const tW = 495.28
-    const cols = { enfant: 0, classe: 155, semaines: 235, prix: 430 }
-    const colW = { enfant: 150, classe: 75, semaines: 190, prix: 65 }
-    const thH = 22
-
-    // En-tête tableau
-    doc.rect(tX, y, tW, thH).fill('#dbeafe')
-    doc.fillColor('#1e40af').font('Helvetica-Bold').fontSize(9)
-    doc.text('ENFANT',   tX + cols.enfant  + 5, y + 7, { width: colW.enfant  - 5, lineBreak: false })
-    doc.text('CLASSE',   tX + cols.classe  + 5, y + 7, { width: colW.classe  - 5, lineBreak: false })
-    doc.text('SEMAINES', tX + cols.semaines + 5, y + 7, { width: colW.semaines - 5, lineBreak: false })
-    doc.text('PRIX',     tX + cols.prix   + 5, y + 7, { width: colW.prix   - 10, align: 'right', lineBreak: false })
-    y += thH
-
-    const thStart = y - thH  // Pour la bordure finale
-
-    // Lignes enfants
-    enfants.forEach((e, idx) => {
-      const rowH = 26
-      if (idx % 2 === 0) doc.rect(tX, y, tW, rowH).fill('#f8fafc')
-
-      const semainesText = (e.semaines || [])
-        .slice().sort((a, b) => a - b)
-        .map(s => e.garderie?.includes(s) ? `${SEMAINE_LABELS[s]} (+gard.)` : SEMAINE_LABELS[s])
-        .join(', ')
-
-      const prix = totalForChild(e)
-
-      doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(9.5)
-         .text(`${e.prenom} ${e.nom}`, tX + cols.enfant + 5, y + 8, { width: colW.enfant - 5, lineBreak: false })
-      doc.font('Helvetica').fontSize(9.5)
-         .text(e.classe, tX + cols.classe + 5, y + 8, { width: colW.classe - 5, lineBreak: false })
-         .text(semainesText, tX + cols.semaines + 5, y + 8, { width: colW.semaines - 10, lineBreak: false })
-      doc.font('Helvetica-Bold')
-         .text(`${prix} EUR`, tX + cols.prix + 5, y + 8, { width: colW.prix - 10, align: 'right', lineBreak: false })
-      y += rowH
+    // Nom de famille pour "Mr et Mme ..."
+    const familyName = parent1Nom || ''
+    const dateEmis   = new Date().toLocaleDateString('fr-FR', {
+      day: '2-digit', month: 'long', year: 'numeric',
     })
 
-    // Bordure tableau
-    doc.rect(tX, thStart, tW, y - thStart).strokeColor('#bfdbfe').lineWidth(1).stroke()
-    doc.moveTo(tX + cols.classe, thStart).lineTo(tX + cols.classe, y).strokeColor('#bfdbfe').lineWidth(0.5).stroke()
-    doc.moveTo(tX + cols.semaines, thStart).lineTo(tX + cols.semaines, y).strokeColor('#bfdbfe').lineWidth(0.5).stroke()
-    doc.moveTo(tX + cols.prix, thStart).lineTo(tX + cols.prix, y).strokeColor('#bfdbfe').lineWidth(0.5).stroke()
+    // Images
+    const logoData = fs.existsSync(LOGO_PATH)      ? fs.readFileSync(LOGO_PATH)      : null
+    const sigData  = fs.existsSync(SIGNATURE_PATH) ? fs.readFileSync(SIGNATURE_PATH) : null
 
-    y += 16
-    doc.moveTo(50, y).lineTo(545.28, y).strokeColor('#dbeafe').lineWidth(1.5).stroke()
-    y += 16
+    // ── Ligne décorative haut ────────────────────────────────────────────────
+    doc.rect(0, 0, 595.28, 6).fill('#8B1C13')
 
-    // ── Récapitulatif financier ──────────────────────────────────────────────
-    doc.fillColor('#1e3a8a').font('Helvetica-Bold').fontSize(11)
-       .text('RECAPITULATIF FINANCIER', 50, y, { lineBreak: false })
-    y += 14
-
-    drawFinRow(doc, 'Total inscription :', `${total} EUR`, y, '#1e3a8a'); y += 22
-    drawFinRow(doc, 'Accompte regle via HelloAsso :', `${accompte} EUR  OK`, y, '#16a34a'); y += 22
-
-    if (solde > 0) {
-      drawFinRow(doc, 'Solde restant a regler :', `${solde} EUR`, y, '#dc2626'); y += 22
-
-      // Encadré avertissement solde
-      y += 6
-      doc.rect(50, y, 495.28, 36).fill('#fffbeb')
-      doc.rect(50, y, 4, 36).fill('#f59e0b')
-      doc.fillColor('#92400e').font('Helvetica').fontSize(10)
-         .text(
-           `Le solde de ${solde} EUR est a remettre en especes ou par cheque a Mora Elodie avant le 15 juin.`,
-           62, y + 11, { width: 475, lineBreak: false }
-         )
-      y += 48
-    } else {
-      drawFinRow(doc, 'Paiement :', 'Integral regle', y, '#16a34a'); y += 22
+    // ── En-tête : logo + infos institution ──────────────────────────────────
+    const headerY = 22
+    if (logoData) {
+      // Logo : largeur ~160px, hauteur proportionnelle (original ~310x100)
+      doc.image(logoData, 40, headerY, { width: 170 })
     }
 
-    // ── Pied de page ────────────────────────────────────────────────────────
-    doc.moveTo(50, 790).lineTo(545.28, 790).strokeColor('#e2e8f0').lineWidth(1).stroke()
-    doc.fillColor('#94a3b8').font('Helvetica').fontSize(8.5)
+    // Bloc institution (à droite du logo)
+    const instX = 230
+    doc.fillColor('#8B1C13').font('Helvetica-Bold').fontSize(13)
+       .text('Les Institutions SINAI', instX, headerY + 4, { lineBreak: false })
+    doc.fillColor('#333333').font('Helvetica').fontSize(10)
+       .text('Ecole Maternelle & Primaire BETH HILLEL', instX, headerY + 20, { lineBreak: false })
+    doc.fillColor('#555555').fontSize(9)
+       .text('89 Rue Carnot - 92300 Levallois-Perret', instX, headerY + 34, { lineBreak: false })
+       .text('ecolebethhillel@gmail.com', instX, headerY + 46, { lineBreak: false })
+
+    // Séparateur
+    const sepY = headerY + 70
+    doc.moveTo(40, sepY).lineTo(555.28, sepY).strokeColor('#8B1C13').lineWidth(1.5).stroke()
+
+    // ── Titre RECU ──────────────────────────────────────────────────────────
+    const titleY = sepY + 30
+    doc.fillColor('#1a1a1a').font('Helvetica-Bold').fontSize(24)
+       .text('RECU', 0, titleY, { align: 'center', width: 595.28 })
+
+    // Soulignement manuel du titre
+    const titleW  = doc.widthOfString('RECU', { fontSize: 24 })
+    const titleX  = (595.28 - titleW) / 2
+    const titleBY = titleY + 28
+    doc.moveTo(titleX, titleBY).lineTo(titleX + titleW, titleBY)
+       .strokeColor('#1a1a1a').lineWidth(1.2).stroke()
+
+    // ── Corps du texte ───────────────────────────────────────────────────────
+    const bodyX = 55
+    const bodyW = 485
+    let y = titleY + 52
+
+    // Paragraphe 1 : attestation
+    doc.fillColor('#1a1a1a').font('Helvetica').fontSize(13)
        .text(
-         'Gan Israel Beth Hillel  |  89 rue Carnot, 92300 Levallois-Perret  |  ganisrael@bethmenahem-lis.com',
-         50, 796, { align: 'center', width: 495.28 }
+         'Je soussignee Mme Sim\'ha Nemni, Directrice de l\'Ecole Primaire',
+         bodyX, y, { width: bodyW, lineBreak: false }
        )
-       .text(`Document emis le ${dateEmis}`, 50, 807, { align: 'center', width: 495.28 })
+    y += 20
+    doc.text(
+      'BETH HILLEL atteste par la presente avoir recu',
+      bodyX, y, { width: bodyW, lineBreak: false }
+    )
+
+    // Montant en chiffres
+    y += 34
+    doc.font('Helvetica-Bold').fontSize(20)
+       .text(`${amount} €`, 0, y, { align: 'center', width: 595.28 })
+
+    // Montant en lettres
+    y += 30
+    doc.font('Helvetica-Bold').fontSize(14)
+       .text(amountToWords(amount), 0, y, { align: 'center', width: 595.28 })
+
+    // "De Mr et Mme [NOM]"
+    y += 36
+    doc.font('Helvetica').fontSize(13)
+       .text('De ', bodyX, y, { continued: true, lineBreak: false })
+    doc.font('Helvetica-Bold')
+       .text(`Mr et Mme ${familyName}`, { lineBreak: false })
+
+    // Enfants inscrits (si disponibles)
+    if (enfants && enfants.length > 0) {
+      y += 22
+      const enfantsNoms = enfants.map(e => `${e.prenom} ${e.nom}`).join(', ')
+      doc.font('Helvetica').fontSize(11).fillColor('#444444')
+         .text(`Enfant(s) : ${enfantsNoms}`, bodyX, y, { width: bodyW, lineBreak: false })
+      doc.fillColor('#1a1a1a')
+    }
+
+    // "Au titre des frais de..."
+    y += 30
+    doc.font('Helvetica').fontSize(13)
+       .text('Au titre des frais de ', bodyX, y, { continued: true, lineBreak: false })
+    doc.font('Helvetica-Bold')
+       .text('garderie et activite extra scolaire', { continued: true, lineBreak: false })
+    doc.font('Helvetica')
+       .text(' du ', { continued: true, lineBreak: false })
+    doc.font('Helvetica-Bold')
+       .text('mois de juillet 2026', { lineBreak: false })
+
+    // ── Date et lieu ────────────────────────────────────────────────────────
+    y += 46
+    doc.font('Helvetica').fontSize(12)
+       .text(`Fait a Levallois-Perret, le ${dateEmis}`, bodyX, y, { lineBreak: false })
+
+    // ── Signature ────────────────────────────────────────────────────────────
+    y += 40
+    const sigX = 360
+
+    doc.font('Helvetica-Bold').fontSize(12)
+       .text('La Directrice', sigX, y, { width: 180, align: 'center', lineBreak: false })
+
+    if (sigData) {
+      y += 16
+      // Signature image (~150px large, centrée dans le bloc)
+      doc.image(sigData, sigX + 10, y, { width: 155 })
+      y += 100
+    } else {
+      y += 60
+    }
+
+    doc.font('Helvetica-Bold').fontSize(12)
+       .text('S. NEMNI', sigX, y, { width: 180, align: 'center', lineBreak: false })
+
+    // ── Ligne décorative bas ─────────────────────────────────────────────────
+    doc.rect(0, 825, 595.28, 6).fill('#8B1C13')
 
     doc.end()
   })
