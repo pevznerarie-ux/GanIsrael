@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 
 const STATUTS = {
   en_attente:    { label: 'En attente',    color: '#f59e0b', bg: '#fef3c7' },
@@ -1405,17 +1405,12 @@ export default function Admin() {
   const [error, setError]       = useState('')
   const [tab, setTab]           = useState('classes')
 
-  // Auto-login si identifiants sauvegardés
-  useEffect(() => {
-    if (saved?.user && saved?.pwd) doLogin(saved.user, saved.pwd, saved.remember)
-  }, [])
+  // Ref toujours à jour — évite les closures périmées dans useEffect/callbacks
+  const authRef = useRef({ user: '', password: '', role: null })
 
-  // Re-synchronise les données depuis le serveur à chaque changement d'onglet
-  useEffect(() => {
-    if (role && user && password) fetchInscriptions(user, password)
-  }, [tab])
-
-  const fetchInscriptions = async (u, pwd) => {
+  const fetchInscriptions = useCallback(async () => {
+    const { user: u, password: pwd } = authRef.current
+    if (!u || !pwd) return
     try {
       const res = await fetch('/api/admin/inscriptions', {
         headers: { 'x-admin-user': u, 'x-admin-password': pwd },
@@ -1424,16 +1419,26 @@ export default function Admin() {
       const data = await res.json()
       setInscriptions(data)
     } catch {}
-  }
+  }, [])
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true)
     setRefreshDone(false)
-    await fetchInscriptions(user, password)
+    await fetchInscriptions()
     setRefreshing(false)
     setRefreshDone(true)
     setTimeout(() => setRefreshDone(false), 2000)
-  }
+  }, [fetchInscriptions])
+
+  // Auto-login si identifiants sauvegardés
+  useEffect(() => {
+    if (saved?.user && saved?.pwd) doLogin(saved.user, saved.pwd, saved.remember)
+  }, [])
+
+  // Re-synchronise depuis le serveur à chaque changement d'onglet
+  useEffect(() => {
+    if (authRef.current.role) fetchInscriptions()
+  }, [tab, fetchInscriptions])
 
   const doLogin = async (u, pwd, rem) => {
     setLoading(true)
@@ -1446,7 +1451,11 @@ export default function Admin() {
       })
       if (res.status === 401) { setError('Identifiants incorrects'); setLoading(false); return }
       const { role: r } = await res.json()
+      // Mettre à jour le ref immédiatement — disponible dans tous les callbacks
+      authRef.current = { user: u, password: pwd, role: r }
       setRole(r)
+      setUser(u)
+      setPassword(pwd)
       if (rem) {
         localStorage.setItem('admin_user', u)
         localStorage.setItem('admin_pwd', pwd)
@@ -1459,7 +1468,7 @@ export default function Admin() {
         localStorage.removeItem('admin_pwd')
       }
       setTab(r === 'admin' ? 'dashboard' : 'classes')
-      await fetchInscriptions(u, pwd)
+      await fetchInscriptions()
     } catch {
       setError('Erreur de connexion au serveur')
     }
@@ -1469,12 +1478,16 @@ export default function Admin() {
   const handleLogin = (e) => { e.preventDefault(); doLogin(user, password, remember) }
 
   const handleStatutChange = async (id, statut) => {
+    // Mise à jour optimiste immédiate (interface réactive)
+    setInscriptions(prev => prev.map(i => i.id === id ? { ...i, statut } : i))
+    const { user: u, password: pwd } = authRef.current
     await fetch(`/api/admin/inscriptions/${id}/statut`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password },
+      headers: { 'Content-Type': 'application/json', 'x-admin-user': u, 'x-admin-password': pwd },
       body: JSON.stringify({ statut }),
     })
-    setInscriptions(prev => prev.map(i => i.id === id ? { ...i, statut } : i))
+    // Re-fetch pour confirmer l'état serveur (dashboard à jour)
+    await fetchInscriptions()
   }
 
   const handleLogout = () => {
@@ -1482,6 +1495,7 @@ export default function Admin() {
     localStorage.removeItem('admin_pwd')
     sessionStorage.removeItem('admin_user')
     sessionStorage.removeItem('admin_pwd')
+    authRef.current = { user: '', password: '', role: null }
     setRole(null)
     setUser('')
     setPassword('')
