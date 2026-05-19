@@ -1400,6 +1400,8 @@ export default function Admin() {
   const [role, setRole]         = useState(null)
   const [inscriptions, setInscriptions] = useState([])
   const [loading, setLoading]   = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshDone, setRefreshDone] = useState(false)
   const [error, setError]       = useState('')
   const [tab, setTab]           = useState('classes')
 
@@ -1422,6 +1424,15 @@ export default function Admin() {
       const data = await res.json()
       setInscriptions(data)
     } catch {}
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    setRefreshDone(false)
+    await fetchInscriptions(user, password)
+    setRefreshing(false)
+    setRefreshDone(true)
+    setTimeout(() => setRefreshDone(false), 2000)
   }
 
   const doLogin = async (u, pwd, rem) => {
@@ -1553,7 +1564,9 @@ export default function Admin() {
         </div>
         <div className="admin-topbar-right">
           {role === 'admin' && <button className="btn-csv" onClick={() => exportCSV(inscriptions)}>⬇ CSV</button>}
-          <button className="btn-refresh" onClick={() => fetchInscriptions(user, password)}>↻ Actualiser</button>
+          <button className="btn-refresh" onClick={handleRefresh} disabled={refreshing}>
+            {refreshing ? <span className="btn-refresh-spin">↻</span> : refreshDone ? '✓ Actualisé' : '↻ Actualiser'}
+          </button>
           <button className="btn-logout" onClick={handleLogout}>Déconnexion</button>
         </div>
       </div>

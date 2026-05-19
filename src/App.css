@@ -1674,9 +1674,13 @@ header, main, footer { position: relative; z-index: 1; }
 }
 
 .btn-csv { background: var(--gold); color: var(--blue-dark); }
-.btn-refresh { background: rgba(255,255,255,0.15); color: white; }
+.btn-refresh { background: rgba(255,255,255,0.15); color: white; transition: background 0.2s; }
+.btn-refresh:disabled { opacity: 0.7; cursor: default; }
 .btn-logout { background: rgba(255,255,255,0.1); color: #93c5fd; }
 .btn-csv:hover, .btn-refresh:hover, .btn-logout:hover { opacity: 0.85; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn-refresh-spin { display: inline-block; animation: spin 0.7s linear infinite; }
 
 .admin-body { padding: 2rem; max-width: 1400px; margin: 0 auto; }
 
