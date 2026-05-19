@@ -1408,6 +1408,11 @@ export default function Admin() {
     if (saved?.user && saved?.pwd) doLogin(saved.user, saved.pwd, saved.remember)
   }, [])
 
+  // Re-synchronise les données depuis le serveur à chaque changement d'onglet
+  useEffect(() => {
+    if (role && user && password) fetchInscriptions(user, password)
+  }, [tab])
+
   const fetchInscriptions = async (u, pwd) => {
     try {
       const res = await fetch('/api/admin/inscriptions', {
