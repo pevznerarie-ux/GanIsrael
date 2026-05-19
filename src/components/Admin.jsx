@@ -32,6 +32,13 @@ function formatPhone(tel) {
   return '33' + digits
 }
 
+function displayPhone(tel) {
+  if (!tel) return ''
+  const d = tel.replace(/\D/g, '')
+  const local = d.startsWith('33') ? '0' + d.slice(2) : d.startsWith('0') ? d : '0' + d
+  return local.replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+}
+
 function waLink(tel, message = '') {
   const phone = formatPhone(tel)
   if (!phone) return '#'
@@ -75,10 +82,10 @@ function exportCSV(inscriptions) {
 // ── Onglet Dashboard ──────────────────────────────────────────────────────────
 function TabDashboard({ inscriptions }) {
   const totalEnfants = inscriptions.reduce((s, i) => s + i.enfants.length, 0)
-  const totalRevenu = inscriptions.reduce((s, i) => s + i.total, 0)
-  const totalAccomptes = inscriptions.reduce((s, i) => s + i.accompte, 0)
+  const totalRevenu = inscriptions.reduce((s, i) => s + Number(i.total), 0)
+  const totalAccomptes = inscriptions.reduce((s, i) => s + Number(i.accompte), 0)
   const totalSoldes = totalRevenu - totalAccomptes
-  const soldeEncaisse = inscriptions.filter(i => i.statut === 'solde_paye').reduce((s, i) => s + (i.total - i.accompte), 0)
+  const soldeEncaisse = inscriptions.filter(i => i.statut === 'solde_paye').reduce((s, i) => s + (Number(i.total) - Number(i.accompte)), 0)
 
   const byStatut = Object.fromEntries(Object.keys(STATUTS).map(k => [k, inscriptions.filter(i => i.statut === k).length]))
 
@@ -225,10 +232,12 @@ function FormInscriptionManuelle({ user, password, onSaved, onClose }) {
     setSaving(true)
     const total = Number(form.total)
     const accompte = form.modePaiement === 'cb' ? total : Number(form.accompte)
+    // CB = paiement total en ligne → soldé d'emblée ; espèces/chèque = acompte seulement
+    const statut = form.modePaiement === 'cb' ? 'solde_paye' : 'accompte_paye'
     const res = await fetch('/api/admin/inscriptions', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ...form, total, accompte }),
+      body: JSON.stringify({ ...form, total, accompte, statut }),
     })
     const { id } = await res.json()
     onSaved(id)
@@ -527,7 +536,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
             </thead>
             <tbody>
               {filtered.map(i => {
-                const solde = i.total - i.accompte
+                const solde = Number(i.total) - Number(i.accompte)
                 return (
                   <tr key={i.id}>
                     <td className="td-id">#{i.id}</td>
@@ -547,7 +556,12 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                         </a>
                       </div>
                       <a href={`mailto:${i.email}`} className="td-email">{i.email}</a>
-                      <div className="td-sub">{i.telephone}</div>
+                      {i.telephone && (
+                        <a href={`tel:${i.telephone}`} className="td-phone">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24 11.47 11.47 0 003.58.57 1 1 0 011 1v3.5a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1h3.5a1 1 0 011 1 11.47 11.47 0 00.57 3.58 1 1 0 01-.25 1.01l-2.2 2.2z"/></svg>
+                          {displayPhone(i.telephone)}
+                        </a>
+                      )}
                     </td>
                     <td>
                       {i.enfants.map((e, idx) => (

@@ -128,10 +128,10 @@ export function insertInscription(data) {
     telephone:      data.telephone,
     email:          data.email,
     mode_paiement:  data.modePaiement,
-    total:          data.total,
-    accompte:       data.accompte,
+    total:          Number(data.total) || 0,
+    accompte:       Number(data.accompte) || 0,
     enfants:        data.enfants,
-    statut:         'en_attente',
+    statut:         data.statut || 'en_attente',
     email_envoye:   false,
     formData:       data,
   })
@@ -149,7 +149,9 @@ export function markEmailSent(id) {
   const item = db.inscriptions.find(i => i.id === +id)
   if (item) {
     item.email_envoye = true
-    item.statut = 'accompte_paye'
+    // Paiement CB = total réglé en intégralité → statut soldé
+    const isFullyPaid = item.mode_paiement === 'cb' || Number(item.accompte) >= Number(item.total)
+    item.statut = isFullyPaid ? 'solde_paye' : 'accompte_paye'
   }
   save(db)
 }

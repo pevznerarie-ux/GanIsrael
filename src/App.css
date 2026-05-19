@@ -1760,6 +1760,24 @@ header, main, footer { position: relative; z-index: 1; }
 .td-email { color: var(--blue-mid); text-decoration: none; font-size: 0.82rem; }
 .td-email:hover { text-decoration: underline; }
 
+.td-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 8px 2px 6px;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, border-color 0.15s;
+}
+.td-phone:hover { background: #dcfce7; border-color: #86efac; }
+
 .td-enfant {
   display: flex;
   align-items: center;
