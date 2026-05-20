@@ -81,12 +81,16 @@ function exportCSV(inscriptions) {
 
 // ── Onglet Dashboard ──────────────────────────────────────────────────────────
 function TabDashboard({ inscriptions }) {
-  const totalEnfants = inscriptions.reduce((s, i) => s + i.enfants.length, 0)
-  const totalRevenu = inscriptions.reduce((s, i) => s + Number(i.total), 0)
-  const totalAccomptes = inscriptions.reduce((s, i) => s + Number(i.accompte), 0)
-  const totalSoldes = totalRevenu - totalAccomptes
-  const soldeEncaisse = inscriptions.filter(i => i.statut === 'solde_paye').reduce((s, i) => s + (Number(i.total) - Number(i.accompte)), 0)
+  // Exclure les annulés et archivés de tous les calculs financiers
+  const actives = inscriptions.filter(i => i.statut !== 'annule' && i.statut !== 'archive')
 
+  const totalEnfants = actives.reduce((s, i) => s + i.enfants.length, 0)
+  const totalRevenu = actives.reduce((s, i) => s + Number(i.total), 0)
+  const totalAccomptes = actives.reduce((s, i) => s + Number(i.accompte), 0)
+  const totalSoldes = totalRevenu - totalAccomptes
+  const soldeEncaisse = actives.filter(i => i.statut === 'solde_paye').reduce((s, i) => s + (Number(i.total) - Number(i.accompte)), 0)
+
+  // Comptage par statut sur toutes les inscriptions (pour voir les annulés/archivés)
   const byStatut = Object.fromEntries(Object.keys(STATUTS).map(k => [k, inscriptions.filter(i => i.statut === k).length]))
 
   // Occupancy par classe × semaine
@@ -111,7 +115,7 @@ function TabDashboard({ inscriptions }) {
       {/* Cartes stats */}
       <div className="admin-stats" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
         {[
-          { label: 'Familles', value: inscriptions.length, icon: '👨‍👩‍👧' },
+          { label: 'Familles', value: actives.length, icon: '👨‍👩‍👧' },
           { label: 'Enfants', value: totalEnfants, icon: '👶' },
           { label: 'Revenus prévus', value: `${totalRevenu} €`, icon: '💰' },
           { label: 'Acomptes reçus', value: `${totalAccomptes} €`, icon: '✅' },
