@@ -91,7 +91,7 @@ function TabDashboard({ inscriptions }) {
 
   // L'acompte est TOUJOURS 50 €/enfant, peu importe le mode de paiement.
   // En CB, accompte = total dans la DB, mais financièrement seul 50 €/enfant est l'acompte.
-  const acompteTheo = (i) => ACOMPTE_PAR_ENFANT * i.enfants.length
+  const acompteTheo = (i) => ACOMPTE_PAR_ENFANT * (i.enfants || []).length
   const totalAccomptes = actives.reduce((s, i) => s + acompteTheo(i), 0)
 
   // Solde théorique restant = total - acompte théorique
@@ -178,7 +178,7 @@ function TabDashboard({ inscriptions }) {
                 const solde = Number(i.total) - ac
                 return (
                   <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#166534', padding: '2px 0', borderBottom: '1px solid #dcfce7' }}>
-                    <span>#{i.id} {i.parent1_prenom} {i.parent1_nom} ({i.enfants.length} enf.)</span>
+                    <span>#{i.id} {i.parent1_prenom} {i.parent1_nom} ({(i.enfants || []).length} enf.)</span>
                     <span style={{ fontWeight: 700 }}>{Number(i.total)} − {ac} = <span style={{ color: '#15803d' }}>{solde} €</span></span>
                   </div>
                 )
