@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 const STATUTS = {
   en_attente:    { label: 'En attente',    color: '#f59e0b', bg: '#fef3c7' },
@@ -1405,11 +1405,7 @@ export default function Admin() {
   const [error, setError]       = useState('')
   const [tab, setTab]           = useState('classes')
 
-  // Ref toujours à jour — évite les closures périmées dans useEffect/callbacks
-  const authRef = useRef({ user: '', password: '', role: null })
-
-  const fetchInscriptions = useCallback(async () => {
-    const { user: u, password: pwd } = authRef.current
+  const fetchInscriptions = async (u, pwd) => {
     if (!u || !pwd) return
     try {
       const res = await fetch('/api/admin/inscriptions', {
@@ -1419,26 +1415,27 @@ export default function Admin() {
       const data = await res.json()
       setInscriptions(data)
     } catch {}
-  }, [])
+  }
 
-  const handleRefresh = useCallback(async () => {
+  const handleRefresh = async () => {
     setRefreshing(true)
     setRefreshDone(false)
-    await fetchInscriptions()
+    await fetchInscriptions(user, password)
     setRefreshing(false)
     setRefreshDone(true)
     setTimeout(() => setRefreshDone(false), 2000)
-  }, [fetchInscriptions])
+  }
+
+  // Re-fetch à chaque changement d'onglet
+  const goToTab = (t) => {
+    setTab(t)
+    fetchInscriptions(user, password)
+  }
 
   // Auto-login si identifiants sauvegardés
   useEffect(() => {
     if (saved?.user && saved?.pwd) doLogin(saved.user, saved.pwd, saved.remember)
   }, [])
-
-  // Re-synchronise depuis le serveur à chaque changement d'onglet
-  useEffect(() => {
-    if (authRef.current.role) fetchInscriptions()
-  }, [tab, fetchInscriptions])
 
   const doLogin = async (u, pwd, rem) => {
     setLoading(true)
@@ -1451,8 +1448,6 @@ export default function Admin() {
       })
       if (res.status === 401) { setError('Identifiants incorrects'); setLoading(false); return }
       const { role: r } = await res.json()
-      // Mettre à jour le ref immédiatement — disponible dans tous les callbacks
-      authRef.current = { user: u, password: pwd, role: r }
       setRole(r)
       setUser(u)
       setPassword(pwd)
@@ -1468,7 +1463,7 @@ export default function Admin() {
         localStorage.removeItem('admin_pwd')
       }
       setTab(r === 'admin' ? 'dashboard' : 'classes')
-      await fetchInscriptions()
+      await fetchInscriptions(u, pwd)
     } catch {
       setError('Erreur de connexion au serveur')
     }
@@ -1478,16 +1473,13 @@ export default function Admin() {
   const handleLogin = (e) => { e.preventDefault(); doLogin(user, password, remember) }
 
   const handleStatutChange = async (id, statut) => {
-    // Mise à jour optimiste immédiate (interface réactive)
     setInscriptions(prev => prev.map(i => i.id === id ? { ...i, statut } : i))
-    const { user: u, password: pwd } = authRef.current
     await fetch(`/api/admin/inscriptions/${id}/statut`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-user': u, 'x-admin-password': pwd },
+      headers: { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password },
       body: JSON.stringify({ statut }),
     })
-    // Re-fetch pour confirmer l'état serveur (dashboard à jour)
-    await fetchInscriptions()
+    fetchInscriptions(user, password)
   }
 
   const handleLogout = () => {
@@ -1495,7 +1487,6 @@ export default function Admin() {
     localStorage.removeItem('admin_pwd')
     sessionStorage.removeItem('admin_user')
     sessionStorage.removeItem('admin_pwd')
-    authRef.current = { user: '', password: '', role: null }
     setRole(null)
     setUser('')
     setPassword('')
@@ -1587,7 +1578,7 @@ export default function Admin() {
 
       <div className="crm-tabs-bar">
         {TABS.map(t => (
-          <button key={t.id} className={`crm-tab-btn ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
+          <button key={t.id} className={`crm-tab-btn ${tab === t.id ? 'active' : ''}`} onClick={() => goToTab(t.id)}>
             {t.label}
           </button>
         ))}
