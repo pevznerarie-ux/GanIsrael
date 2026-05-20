@@ -166,25 +166,6 @@ function TabDashboard({ inscriptions }) {
             <span>Acomptes encaissés</span>
             <strong style={{ color: '#16a34a' }}>{totalAccomptes} €</strong>
           </div>
-          <div className="crm-finance-row">
-            <span>Soldes encaissés</span>
-            <strong style={{ color: '#16a34a' }}>{soldeEncaisse} €</strong>
-          </div>
-          {soldesPayes.length > 0 && (
-            <div style={{ margin: '0.25rem 0 0.5rem', padding: '0.5rem', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#15803d', marginBottom: 4 }}>Détail soldes encaissés :</div>
-              {soldesPayes.map(i => {
-                const ac = acompteTheo(i)
-                const solde = Number(i.total) - ac
-                return (
-                  <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#166534', padding: '2px 0', borderBottom: '1px solid #dcfce7' }}>
-                    <span>#{i.id} {i.parent1_prenom} {i.parent1_nom} ({(i.enfants || []).length} enf.)</span>
-                    <span style={{ fontWeight: 700 }}>{Number(i.total)} − {ac} = <span style={{ color: '#15803d' }}>{solde} €</span></span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
           <div className="crm-finance-row" style={{ borderTop: '2px solid #e2e8f0', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
             <span>Restant à encaisser</span>
             <strong style={{ color: '#dc2626', fontSize: '1.1rem' }}>{totalSoldes - soldeEncaisse} €</strong>
