@@ -149,9 +149,14 @@ export function markEmailSent(id) {
   const item = db.inscriptions.find(i => i.id === +id)
   if (item) {
     item.email_envoye = true
-    // Paiement CB = total réglé en intégralité → statut soldé
+    // Paiement CB = total réglé en intégralité via HelloAsso → statut soldé
     const isFullyPaid = item.mode_paiement === 'cb' || Number(item.accompte) >= Number(item.total)
     item.statut = isFullyPaid ? 'solde_paye' : 'accompte_paye'
+    // Pour les paiements CB, l'intégralité est encaissée via HelloAsso.
+    // On met accompte = total pour que soldeEncaisse = 0 (pas de solde en espèces/chèque).
+    if (item.mode_paiement === 'cb') {
+      item.accompte = Number(item.total)
+    }
   }
   save(db)
 }

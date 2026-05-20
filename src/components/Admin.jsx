@@ -1440,6 +1440,15 @@ export default function Admin() {
     if (authRef.current.role) fetchInscriptions()
   }, [tab, fetchInscriptions])
 
+  // Polling automatique toutes les 30 secondes pour garder les données à jour
+  useEffect(() => {
+    if (!role) return
+    const interval = setInterval(() => {
+      if (authRef.current.role) fetchInscriptions()
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [role, fetchInscriptions])
+
   const doLogin = async (u, pwd, rem) => {
     setLoading(true)
     setError('')

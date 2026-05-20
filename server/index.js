@@ -384,7 +384,7 @@ app.post('/api/admin/inscriptions/:id/send-receipt', async (req, res) => {
 app.patch('/api/admin/inscriptions/:id/statut', (req, res) => {
   if (!authAdmin(req, res)) return
   const { statut } = req.body
-  const VALID = ['en_attente', 'accompte_paye', 'solde_paye', 'annule']
+  const VALID = ['en_attente', 'accompte_paye', 'solde_paye', 'annule', 'archive']
   if (!VALID.includes(statut)) return res.status(400).json({ error: 'Statut invalide' })
   updateStatut(req.params.id, statut)
   res.json({ ok: true })
