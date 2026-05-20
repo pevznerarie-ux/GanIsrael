@@ -86,7 +86,7 @@ function TabDashboard({ inscriptions }) {
   // Exclure les annulés et archivés de tous les calculs financiers
   const actives = inscriptions.filter(i => i.statut !== 'annule' && i.statut !== 'archive')
 
-  const totalEnfants = actives.reduce((s, i) => s + i.enfants.length, 0)
+  const totalEnfants = inscriptions.filter(i => i.statut !== 'annule').reduce((s, i) => s + i.enfants.length, 0)
   const totalRevenu = actives.reduce((s, i) => s + Number(i.total), 0)
 
   // L'acompte est TOUJOURS 50 €/enfant, peu importe le mode de paiement.
@@ -165,6 +165,10 @@ function TabDashboard({ inscriptions }) {
           <div className="crm-finance-row">
             <span>Acomptes encaissés</span>
             <strong style={{ color: '#16a34a' }}>{totalAccomptes} €</strong>
+          </div>
+          <div className="crm-finance-row">
+            <span>Soldes encaissés</span>
+            <strong style={{ color: '#16a34a' }}>{soldeEncaisse} €</strong>
           </div>
           <div className="crm-finance-row" style={{ borderTop: '2px solid #e2e8f0', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
             <span>Restant à encaisser</span>
