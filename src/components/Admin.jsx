@@ -81,7 +81,7 @@ function exportCSV(inscriptions) {
 
 // ── Onglet Dashboard ──────────────────────────────────────────────────────────
 function TabDashboard({ inscriptions }) {
-  const totalEnfants = inscriptions.reduce((s, i) => s + i.enfants.length, 0)
+  const totalEnfants = inscriptions.filter(i => i.statut !== 'annule').reduce((s, i) => s + i.enfants.length, 0)
   const totalRevenu = inscriptions.reduce((s, i) => s + Number(i.total), 0)
   const totalAccomptes = inscriptions.reduce((s, i) => s + Number(i.accompte), 0)
   const totalSoldes = totalRevenu - totalAccomptes
@@ -150,10 +150,6 @@ function TabDashboard({ inscriptions }) {
           <div className="crm-finance-row">
             <span>Acomptes encaissés</span>
             <strong style={{ color: '#16a34a' }}>{totalAccomptes} €</strong>
-          </div>
-          <div className="crm-finance-row">
-            <span>Soldes encaissés</span>
-            <strong style={{ color: '#16a34a' }}>{soldeEncaisse} €</strong>
           </div>
           <div className="crm-finance-row" style={{ borderTop: '2px solid #e2e8f0', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
             <span>Restant à encaisser</span>
