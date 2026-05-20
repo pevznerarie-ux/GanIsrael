@@ -80,16 +80,26 @@ function exportCSV(inscriptions) {
 }
 
 // ── Onglet Dashboard ──────────────────────────────────────────────────────────
+const ACOMPTE_PAR_ENFANT = 50 // Acompte fixe : 50 € par enfant
+
 function TabDashboard({ inscriptions }) {
   // Exclure les annulés et archivés de tous les calculs financiers
   const actives = inscriptions.filter(i => i.statut !== 'annule' && i.statut !== 'archive')
 
   const totalEnfants = actives.reduce((s, i) => s + i.enfants.length, 0)
   const totalRevenu = actives.reduce((s, i) => s + Number(i.total), 0)
-  const totalAccomptes = actives.reduce((s, i) => s + Number(i.accompte), 0)
+
+  // L'acompte est TOUJOURS 50 €/enfant, peu importe le mode de paiement.
+  // En CB, accompte = total dans la DB, mais financièrement seul 50 €/enfant est l'acompte.
+  const acompteTheo = (i) => ACOMPTE_PAR_ENFANT * i.enfants.length
+  const totalAccomptes = actives.reduce((s, i) => s + acompteTheo(i), 0)
+
+  // Solde théorique restant = total - acompte théorique
   const totalSoldes = totalRevenu - totalAccomptes
+
+  // Solde encaissé = pour les inscriptions soldées, ce qui dépasse l'acompte théorique
   const soldesPayes = actives.filter(i => i.statut === 'solde_paye')
-  const soldeEncaisse = soldesPayes.reduce((s, i) => s + (Number(i.total) - Number(i.accompte)), 0)
+  const soldeEncaisse = soldesPayes.reduce((s, i) => s + (Number(i.total) - acompteTheo(i)), 0)
 
   // Comptage par statut sur toutes les inscriptions (pour voir les annulés/archivés)
   const byStatut = Object.fromEntries(Object.keys(STATUTS).map(k => [k, inscriptions.filter(i => i.statut === k).length]))
@@ -164,11 +174,12 @@ function TabDashboard({ inscriptions }) {
             <div style={{ margin: '0.25rem 0 0.5rem', padding: '0.5rem', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#15803d', marginBottom: 4 }}>Détail soldes encaissés :</div>
               {soldesPayes.map(i => {
-                const solde = Number(i.total) - Number(i.accompte)
+                const ac = acompteTheo(i)
+                const solde = Number(i.total) - ac
                 return (
                   <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#166534', padding: '2px 0', borderBottom: '1px solid #dcfce7' }}>
-                    <span>#{i.id} {i.parent1_prenom} {i.parent1_nom}</span>
-                    <span style={{ fontWeight: 700 }}>{Number(i.total)} − {Number(i.accompte)} = <span style={{ color: '#15803d' }}>{solde} €</span></span>
+                    <span>#{i.id} {i.parent1_prenom} {i.parent1_nom} ({i.enfants.length} enf.)</span>
+                    <span style={{ fontWeight: 700 }}>{Number(i.total)} − {ac} = <span style={{ color: '#15803d' }}>{solde} €</span></span>
                   </div>
                 )
               })}
