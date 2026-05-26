@@ -3,7 +3,7 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
+import { insertInscription, getInscription, markEmailSent, markReceiptSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
 import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent } from './email.js'
 import { generateReceiptPDF } from './receipt.js'
 
@@ -372,6 +372,7 @@ app.post('/api/admin/inscriptions/:id/send-receipt', async (req, res) => {
   try {
     const pdfBuffer = await generateReceiptPDF(inscription, inscription.id)
     await sendReceiptToParent(data, inscription.id, pdfBuffer)
+    markReceiptSent(req.params.id)
     console.log(`[Reçu] ✓ Envoyé à ${data.email} pour inscription #${inscription.id}`)
     res.json({ ok: true })
   } catch (err) {

@@ -131,9 +131,11 @@ export function insertInscription(data) {
     total:          Number(data.total) || 0,
     accompte:       Number(data.accompte) || 0,
     enfants:        data.enfants,
-    statut:         data.statut || 'en_attente',
-    email_envoye:   false,
-    formData:       data,
+    statut:              data.statut || 'en_attente',
+    email_envoye:        false,
+    recu_envoye:         false,
+    solde_mode_paiement: '',
+    formData:            data,
   })
   save(db)
   return id
@@ -158,6 +160,13 @@ export function markEmailSent(id) {
 
 export function getAllInscriptions() {
   return load().inscriptions
+}
+
+export function markReceiptSent(id) {
+  const db = load()
+  const item = db.inscriptions.find(i => i.id === +id)
+  if (item) item.recu_envoye = true
+  save(db)
 }
 
 export function updateStatut(id, statut) {

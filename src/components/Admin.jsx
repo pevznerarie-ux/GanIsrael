@@ -52,7 +52,7 @@ function soldeMessage(parent1Prenom, enfants, solde) {
 }
 
 function exportCSV(inscriptions) {
-  const headers = ['ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone', 'Enfants', 'Classes', 'Semaines', 'Mode paiement', 'Total (€)', 'Acompte (€)', 'Solde (€)', 'Statut']
+  const headers = ['ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone', 'Enfants', 'Classes', 'Semaines', 'Mode paiement accompte', 'Total (€)', 'Acompte (€)', 'Solde (€)', 'Mode paiement solde', 'Statut', 'Reçu envoyé']
   const rows = inscriptions.map(i => [
     i.id,
     i.created_at,
@@ -67,7 +67,9 @@ function exportCSV(inscriptions) {
     i.total,
     i.accompte,
     i.total - i.accompte,
+    i.solde_mode_paiement || '',
     STATUTS[i.statut]?.label || i.statut,
+    i.recu_envoye ? 'Oui' : 'Non',
   ])
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
@@ -444,7 +446,13 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
         method: 'POST', headers,
       })
       if (!res.ok) throw new Error()
+      // Marquer reçu envoyé de façon persistante en DB
+      await fetch(`/api/admin/inscriptions/${id}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ recu_envoye: true }),
+      })
       setReceiptFeedback(prev => ({ ...prev, [id]: 'ok' }))
+      onInscriptionUpdated()
     } catch {
       setReceiptFeedback(prev => ({ ...prev, [id]: 'error' }))
     } finally {
@@ -543,7 +551,8 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                 <th>Famille</th>
                 <th>Contact</th>
                 <th>Enfants</th>
-                <th>Paiement</th>
+                <th>Paiement accompte</th>
+                <th>Mode solde</th>
                 <th>Total / Solde</th>
                 <th>Statut</th>
                 <th>Actions</th>
@@ -597,6 +606,25 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                       </span>
                     </td>
                     <td>
+                      <select
+                        className="solde-mode-select"
+                        value={i.solde_mode_paiement || ''}
+                        onChange={async e => {
+                          const val = e.target.value
+                          await fetch(`/api/admin/inscriptions/${i.id}`, {
+                            method: 'PATCH', headers,
+                            body: JSON.stringify({ solde_mode_paiement: val }),
+                          })
+                          onInscriptionUpdated()
+                        }}
+                      >
+                        <option value="">—</option>
+                        <option value="cb">💳 CB</option>
+                        <option value="especes">💵 Espèces</option>
+                        <option value="cheque">📝 Chèque</option>
+                      </select>
+                    </td>
+                    <td>
                       <div className="td-total">{i.total} €</div>
                       <div className="td-sub">Acompte : <span style={{ color: '#16a34a', fontWeight: 700 }}>{i.accompte} €</span></div>
                       {solde > 0 && <div className="td-solde">Solde : {solde} €</div>}
@@ -619,15 +647,18 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                           👶 Enfant
                         </button>
                         <button
-                          className={`crm-btn-action crm-btn-action-receipt${receiptFeedback[i.id] === 'ok' ? ' crm-btn-action-receipt--ok' : receiptFeedback[i.id] === 'error' ? ' crm-btn-action-receipt--error' : ''}`}
+                          className={`crm-btn-action crm-btn-action-receipt${
+                            i.recu_envoye || receiptFeedback[i.id] === 'ok' ? ' crm-btn-action-receipt--ok' :
+                            receiptFeedback[i.id] === 'error' ? ' crm-btn-action-receipt--error' : ''
+                          }`}
                           onClick={() => handleSendReceipt(i.id)}
                           disabled={!!sendingReceipt[i.id]}
-                          title="Envoyer le reçu PDF par email"
+                          title={i.recu_envoye ? 'Reçu déjà envoyé — renvoyer ?' : 'Envoyer le reçu PDF par email'}
                         >
                           {sendingReceipt[i.id]
                             ? '⏳ Envoi…'
-                            : receiptFeedback[i.id] === 'ok'
-                            ? '✅ Envoyé !'
+                            : i.recu_envoye || receiptFeedback[i.id] === 'ok'
+                            ? '✅ Reçu envoyé'
                             : receiptFeedback[i.id] === 'error'
                             ? '❌ Erreur'
                             : '📄 Reçu'}
