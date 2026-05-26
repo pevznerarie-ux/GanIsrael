@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import 'dotenv/config'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+const LOGO_URL = `${process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'}/logo-gan-israel.jpeg`
 
 const SEMAINE_LABELS = { 1: '6–10 juillet', 2: '13–17 juillet', 3: '20–24 juillet' }
 const basePrice = (n) => n === 3 ? 525 : n * 180
@@ -41,7 +42,7 @@ export async function sendConfirmationToParent(data) {
 <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
 
   <div style="background:#1e3a8a;padding:24px 32px;text-align:center">
-    <div style="font-size:28px;margin-bottom:6px">✡</div>
+    <img src="${LOGO_URL}" alt="Gan Israel Beth Hillel" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);margin-bottom:10px;display:block;margin-left:auto;margin-right:auto" />
     <h1 style="color:white;margin:0;font-size:20px;font-weight:800">Gan Israel Beth Hillel</h1>
     <p style="color:#93c5fd;margin:4px 0 0;font-size:13px">Centre Aéré Maternelle — Levallois-Perret</p>
   </div>
@@ -126,7 +127,7 @@ export async function sendReceiptToParent(data, inscriptionId, pdfBuffer) {
 <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
 
   <div style="background:#1e3a8a;padding:24px 32px;text-align:center">
-    <div style="font-size:28px;margin-bottom:6px">✡</div>
+    <img src="${LOGO_URL}" alt="Gan Israel Beth Hillel" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);margin-bottom:10px;display:block;margin-left:auto;margin-right:auto" />
     <h1 style="color:white;margin:0;font-size:20px;font-weight:800">Gan Israel Beth Hillel</h1>
     <p style="color:#93c5fd;margin:4px 0 0;font-size:13px">Centre Aéré Maternelle — Levallois-Perret</p>
   </div>
@@ -187,9 +188,12 @@ export async function sendNotificationToAdmin(data, inscriptionId) {
 <html lang="fr">
 <body style="font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;margin:0;padding:20px">
 <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
-  <div style="background:#1e3a8a;padding:20px 28px">
-    <h2 style="color:white;margin:0;font-size:16px">📋 Nouvelle inscription #${inscriptionId}</h2>
-    <p style="color:#93c5fd;margin:4px 0 0;font-size:13px">${new Date().toLocaleDateString('fr-FR', { dateStyle: 'full' })}</p>
+  <div style="background:#1e3a8a;padding:20px 28px;display:flex;align-items:center;gap:14px">
+    <img src="${LOGO_URL}" alt="Gan Israel" width="48" height="48" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.25);flex-shrink:0" />
+    <div>
+      <h2 style="color:white;margin:0;font-size:16px">📋 Nouvelle inscription #${inscriptionId}</h2>
+      <p style="color:#93c5fd;margin:4px 0 0;font-size:13px">${new Date().toLocaleDateString('fr-FR', { dateStyle: 'full' })}</p>
+    </div>
   </div>
   <div style="padding:28px">
     <table width="100%" style="margin-bottom:20px">
