@@ -131,11 +131,12 @@ export function insertInscription(data) {
     total:          Number(data.total) || 0,
     accompte:       Number(data.accompte) || 0,
     enfants:        data.enfants,
-    statut:              data.statut || 'en_attente',
-    email_envoye:        false,
-    recu_envoye:         false,
-    solde_mode_paiement: '',
-    formData:            data,
+    statut:                data.statut || 'en_attente',
+    email_envoye:          false,
+    recu_envoye:           false,
+    accompte_mode_paiement: 'cb',
+    solde_mode_paiement:   '',
+    formData:              data,
   })
   save(db)
   return id

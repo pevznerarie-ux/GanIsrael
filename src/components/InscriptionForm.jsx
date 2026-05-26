@@ -32,8 +32,9 @@ const basePrice = (n, classe) => n === 3 ? (isPregan(classe) ? 480 : 525) : n * 
 const garderiePrice = (garderie) => (garderie?.length || 0) * 20
 const totalForChild = (child) => basePrice(child.semaines.length, child.classe) + garderiePrice(child.garderie)
 
-export default function InscriptionForm() {
-  const [form, setForm] = useState(INIT)
+export default function InscriptionForm({ paiementMode }) {
+  const modeAutre = paiementMode === 'autre'
+  const [form, setForm] = useState({ ...INIT, modePaiement: modeAutre ? 'autre' : '' })
   const [status, setStatus] = useState('idle')
   const [helloassoUrl, setHelloassoUrl] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -124,6 +125,35 @@ export default function InscriptionForm() {
     }
 
     setStatus('loading')
+
+    // ── Flux espèces directes (pas de HelloAsso) ──────────────────────────────
+    if (form.modePaiement === 'autre') {
+      try {
+        const res = await fetch('/api/inscription-especes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            formData: {
+              parent1Prenom: form.parent1Prenom, parent1Nom: form.parent1Nom,
+              parent2Prenom: form.parent2Prenom, parent2Nom: form.parent2Nom,
+              telephone: form.telephone, email: form.email,
+              modePaiement: 'autre', total, accompte: 0,
+              enfants: form.enfants, statut: 'attente_validation',
+            },
+          }),
+        })
+        if (res.status === 409) {
+          const { classe } = await res.json()
+          fetch('/api/disponibilites').then(r => r.json()).then(setDispos).catch(() => {})
+          throw new Error(`La classe ${classe} est complète. Veuillez sélectionner une autre classe.`)
+        }
+        if (!res.ok) throw new Error('Erreur serveur')
+        setStatus('sent')
+      } catch (err) {
+        setStatus(err.message.includes('complète') ? err.message : 'error')
+      }
+      return
+    }
 
     try {
       // 1. Enregistrement via Formspree (optionnel si ID non configuré)
@@ -476,30 +506,41 @@ export default function InscriptionForm() {
 
           {/* Mode de paiement */}
           <div className="form-group-title">💳 Mode de paiement</div>
-          <div className="payment-modes">
-            {[
-              { id: 'especes_cheque', icon: '💵📝', label: 'Espèces / Chèque', desc: `Accompte ${deposit} €` },
-              { id: 'cb', icon: '💳', label: 'Carte bancaire', desc: total > 0 ? `Total ${total} €` : 'Paiement total en ligne' },
-            ].map(m => (
-              <label key={m.id}
-                className={`payment-mode-card ${form.modePaiement === m.id ? 'selected' : ''}`}>
-                <input type="radio" name="modePaiement" value={m.id}
-                  checked={form.modePaiement === m.id} onChange={handleGlobal} />
-                <span className="pm-icon">{m.icon}</span>
-                <span className="pm-label">{m.label}</span>
-                <span className="pm-desc">{m.desc}</span>
-              </label>
-            ))}
-          </div>
-
-          {form.modePaiement && total > 0 && (
-            <div className="helloasso-note">
-              {form.modePaiement === 'cb'
-                ? `Total à régler : ${total} €.`
-                : <>
-                    Accompte à régler : <strong>{deposit} €</strong>. Le solde de <strong>{total - deposit} €</strong> est à remettre en espèces ou par chèque à <strong>Mora Elodie</strong> avant le <strong>15 juin</strong> au plus tard.
-                  </>}
+          {modeAutre ? (
+            <div className="payment-autre-notice">
+              <span className="payment-autre-icon">💵</span>
+              <div>
+                <strong>Paiement intégral en espèces</strong>
+                {total > 0 && <p>Montant total : <strong>{total} €</strong> — à régler directement auprès de la direction.</p>}
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="payment-modes">
+                {[
+                  { id: 'especes_cheque', icon: '💵📝', label: 'Espèces / Chèque', desc: `Accompte ${deposit} €` },
+                  { id: 'cb', icon: '💳', label: 'Carte bancaire', desc: total > 0 ? `Total ${total} €` : 'Paiement total en ligne' },
+                ].map(m => (
+                  <label key={m.id}
+                    className={`payment-mode-card ${form.modePaiement === m.id ? 'selected' : ''}`}>
+                    <input type="radio" name="modePaiement" value={m.id}
+                      checked={form.modePaiement === m.id} onChange={handleGlobal} />
+                    <span className="pm-icon">{m.icon}</span>
+                    <span className="pm-label">{m.label}</span>
+                    <span className="pm-desc">{m.desc}</span>
+                  </label>
+                ))}
+              </div>
+              {form.modePaiement && total > 0 && (
+                <div className="helloasso-note">
+                  {form.modePaiement === 'cb'
+                    ? `Total à régler : ${total} €.`
+                    : <>
+                        Accompte à régler : <strong>{deposit} €</strong>. Le solde de <strong>{total - deposit} €</strong> est à remettre en espèces ou par chèque à <strong>Mora Elodie</strong> avant le <strong>15 juin</strong> au plus tard.
+                      </>}
+                </div>
+              )}
+            </>
           )}
 
           {/* Autorisation */}
@@ -522,19 +563,31 @@ export default function InscriptionForm() {
             </div>
           )}
 
-          <button type="submit" className="btn-submit" disabled={!canSubmit}>
-            {status === 'loading'
-              ? '⏳ Redirection en cours…'
-              : form.modePaiement === 'cb' && total > 0
-              ? `💳 Payer ${total} €`
-              : form.modePaiement === 'especes_cheque' && total > 0
-              ? `🔗 Régler l'accompte — ${deposit} €`
-              : 'Compléter le formulaire pour continuer'}
-          </button>
-          {form.modePaiement && total > 0 && (
-            <p className="helloasso-redirect-note">
-              🔒 Vous serez redirigé vers HelloAsso pour un paiement sécurisé.
-            </p>
+          {status === 'sent' ? (
+            <div className="inscription-autre-success">
+              <div className="inscription-autre-success-icon">✅</div>
+              <h3>Demande reçue !</h3>
+              <p>Votre demande d'inscription a bien été enregistrée. Vous recevrez un email de confirmation dès validation par l'administration.</p>
+            </div>
+          ) : (
+            <>
+              <button type="submit" className="btn-submit" disabled={!canSubmit}>
+                {status === 'loading'
+                  ? (modeAutre ? '⏳ Envoi en cours…' : '⏳ Redirection en cours…')
+                  : modeAutre && total > 0
+                  ? `📋 Envoyer ma demande — ${total} €`
+                  : form.modePaiement === 'cb' && total > 0
+                  ? `💳 Payer ${total} €`
+                  : form.modePaiement === 'especes_cheque' && total > 0
+                  ? `🔗 Régler l'accompte — ${deposit} €`
+                  : 'Compléter le formulaire pour continuer'}
+              </button>
+              {form.modePaiement && form.modePaiement !== 'autre' && total > 0 && (
+                <p className="helloasso-redirect-note">
+                  🔒 Vous serez redirigé vers HelloAsso pour un paiement sécurisé.
+                </p>
+              )}
+            </>
           )}
         </form>
       </div>

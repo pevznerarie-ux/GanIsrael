@@ -17,6 +17,7 @@ export default function App() {
   const params = new URLSearchParams(window.location.search)
   const showThankYou = params.get('merci') === '1'
   const inscriptionId = params.get('id')
+  const paiementMode = params.get('mode') || ''
 
   useEffect(() => {
     if (!showThankYou || !inscriptionId) return
@@ -42,7 +43,7 @@ export default function App() {
         <Hero />
         <PricingGrid />
         <Programme />
-        <InscriptionForm />
+        <InscriptionForm paiementMode={paiementMode} />
       </main>
       <Footer />
     </>

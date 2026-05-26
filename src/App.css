@@ -2275,6 +2275,53 @@ header, main, footer { position: relative; z-index: 1; }
 .crm-btn-action-receipt:disabled { opacity: 0.6; cursor: not-allowed; }
 .crm-btn-action-archive { background: #f1f5f9; color: #475569; }
 .crm-btn-action-delete  { background: #fee2e2; color: #dc2626; }
+.crm-btn-action-valider { background: #dcfce7; color: #15803d; font-weight: 700; }
+.crm-btn-action-valider:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Dropdowns mode paiement (accompte + solde) — même style */
+.paiement-mode-select,
+.solde-mode-select {
+  padding: 0.28rem 0.5rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.paiement-mode-select:focus,
+.solde-mode-select:focus { outline: none; border-color: #6366f1; }
+
+/* Page inscription espèces */
+.payment-autre-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: #ede9fe;
+  border: 2px solid #c4b5fd;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+.payment-autre-icon { font-size: 1.6rem; }
+.payment-autre-notice strong { color: #5b21b6; font-size: 1rem; }
+.payment-autre-notice p { margin: 0.25rem 0 0; color: #6d28d9; font-size: 0.9rem; }
+
+.inscription-autre-success {
+  text-align: center;
+  padding: 2rem 1rem;
+  background: #f0fdf4;
+  border: 2px solid #86efac;
+  border-radius: 16px;
+  margin-top: 1rem;
+}
+.inscription-autre-success-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.inscription-autre-success h3 { color: #15803d; margin: 0 0 0.5rem; font-size: 1.3rem; }
+.inscription-autre-success p { color: #166534; margin: 0; font-size: 0.95rem; }
 
 .crm-pwd-wrap {
   position: relative;

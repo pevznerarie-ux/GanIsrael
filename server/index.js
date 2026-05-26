@@ -385,10 +385,86 @@ app.post('/api/admin/inscriptions/:id/send-receipt', async (req, res) => {
 app.patch('/api/admin/inscriptions/:id/statut', (req, res) => {
   if (!authAdmin(req, res)) return
   const { statut } = req.body
-  const VALID = ['en_attente', 'accompte_paye', 'solde_paye', 'annule']
+  const VALID = ['en_attente', 'accompte_paye', 'solde_paye', 'annule', 'archive', 'attente_validation']
   if (!VALID.includes(statut)) return res.status(400).json({ error: 'Statut invalide' })
   updateStatut(req.params.id, statut)
   res.json({ ok: true })
+})
+
+// ── Inscription directe espèces (sans HelloAsso) ─────────────────────────────
+app.post('/api/inscription-especes', async (req, res) => {
+  const { formData } = req.body
+  if (!formData?.enfants || !formData.email || !formData.parent1Prenom) {
+    return res.status(400).json({ error: 'Données manquantes' })
+  }
+
+  // Vérification des places disponibles
+  const counts = countByClasseAndSemaine()
+  for (const enfant of formData.enfants) {
+    const { classe, semaines } = enfant
+    if (!classe || !CAPACITES[classe]) continue
+    for (const sid of (semaines || [])) {
+      if ((counts[classe]?.[sid] || 0) >= CAPACITES[classe]) {
+        return res.status(409).json({ error: `La classe ${classe} est complète pour la semaine ${sid}.`, classe, semaine: sid })
+      }
+    }
+  }
+
+  try {
+    const id = insertInscription({ ...formData, modePaiement: 'autre', accompte: 0, statut: 'attente_validation' })
+    console.log(`[inscription-especes] ✓ Créée #${id} — ${formData.parent1Prenom} ${formData.parent1Nom}`)
+    res.json({ ok: true, id })
+  } catch (err) {
+    console.error('[inscription-especes]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Admin — valider une inscription espèces (envoie l'email) ─────────────────
+app.post('/api/admin/inscriptions/:id/valider', async (req, res) => {
+  if (!authAdmin(req, res)) return
+
+  const inscription = getInscription(req.params.id)
+  if (!inscription) return res.status(404).json({ error: 'Inscription introuvable' })
+  if (inscription.email_envoye) return res.json({ ok: true, alreadySent: true })
+
+  const formData = inscription.formData
+  if (!formData) return res.status(500).json({ error: 'Données manquantes' })
+
+  try {
+    updateInscription(req.params.id, { email_envoye: true, statut: 'en_attente' })
+
+    sendConfirmationToParent(formData)
+      .then(() => console.log(`[Valider] ✓ Email parent → ${formData.email}`))
+      .catch(e => console.error('[Valider] ✗ Email parent:', e.message))
+
+    sendNotificationToAdmin(formData, inscription.id)
+      .then(() => console.log('[Valider] ✓ Email admin'))
+      .catch(e => console.error('[Valider] ✗ Email admin:', e.message))
+
+    // Sync Google Sheets
+    const sheetsUrl = process.env.SHEETS_WEBHOOK
+    if (sheetsUrl && formData.enfants) {
+      formData.enfants.forEach((enfant, idx) => {
+        fetch(sheetsUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: inscription.id, enfantIndex: idx + 1, nombreEnfants: formData.enfants.length,
+            parent1Prenom: formData.parent1Prenom, parent1Nom: formData.parent1Nom,
+            parent2Prenom: formData.parent2Prenom || '', parent2Nom: formData.parent2Nom || '',
+            telephone: formData.telephone, email: formData.email,
+            modePaiement: 'autre', total: formData.total, accompte: 0, enfant,
+          }),
+        }).catch(e => console.error('[Sheets]', e.message))
+      })
+    }
+
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[valider]', err.message)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // Servir le build React en production

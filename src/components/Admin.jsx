@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 
 const STATUTS = {
-  en_attente:    { label: 'En attente',    color: '#f59e0b', bg: '#fef3c7' },
-  accompte_paye: { label: 'Acompte payé',  color: '#2563eb', bg: '#dbeafe' },
-  solde_paye:    { label: 'Soldé',         color: '#16a34a', bg: '#dcfce7' },
-  annule:        { label: 'Annulé',        color: '#dc2626', bg: '#fee2e2' },
-  archive:       { label: 'Archivé',       color: '#94a3b8', bg: '#f1f5f9' },
+  attente_validation: { label: '⏳ Validation admin', color: '#7c3aed', bg: '#ede9fe' },
+  en_attente:         { label: 'En attente',          color: '#f59e0b', bg: '#fef3c7' },
+  accompte_paye:      { label: 'Acompte payé',        color: '#2563eb', bg: '#dbeafe' },
+  solde_paye:         { label: 'Soldé',               color: '#16a34a', bg: '#dcfce7' },
+  annule:             { label: 'Annulé',              color: '#dc2626', bg: '#fee2e2' },
+  archive:            { label: 'Archivé',             color: '#94a3b8', bg: '#f1f5f9' },
 }
 
 const SEMAINES = [
@@ -435,6 +436,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [sendingReceipt, setSendingReceipt] = useState({})
   const [receiptFeedback, setReceiptFeedback] = useState({})
+  const [validating, setValidating] = useState({})
 
   const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
 
@@ -458,6 +460,19 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
     } finally {
       setSendingReceipt(prev => ({ ...prev, [id]: false }))
       setTimeout(() => setReceiptFeedback(prev => ({ ...prev, [id]: null })), 4000)
+    }
+  }
+
+  const handleValider = async (id) => {
+    setValidating(prev => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetch(`/api/admin/inscriptions/${id}/valider`, { method: 'POST', headers })
+      if (!res.ok) throw new Error()
+      onInscriptionUpdated()
+    } catch {
+      alert('Erreur lors de la validation — vérifiez la connexion email.')
+    } finally {
+      setValidating(prev => ({ ...prev, [id]: false }))
     }
   }
 
@@ -601,9 +616,26 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                       )}
                     </td>
                     <td>
-                      <span className={`badge-mode badge-${i.mode_paiement}`}>
-                        {i.mode_paiement === 'cb' ? '💳 CB' : '💵 Espèces/Chèque'}
-                      </span>
+                      {i.mode_paiement === 'autre' ? (
+                        <span className="badge-mode" style={{ background: '#ede9fe', color: '#6d28d9' }}>💵 Espèces directes</span>
+                      ) : (
+                        <select
+                          className="paiement-mode-select"
+                          value={i.accompte_mode_paiement || 'cb'}
+                          onChange={async e => {
+                            const val = e.target.value
+                            await fetch(`/api/admin/inscriptions/${i.id}`, {
+                              method: 'PATCH', headers,
+                              body: JSON.stringify({ accompte_mode_paiement: val }),
+                            })
+                            onInscriptionUpdated()
+                          }}
+                        >
+                          <option value="cb">💳 CB</option>
+                          <option value="especes">💵 Espèces</option>
+                          <option value="cheque">📝 Chèque</option>
+                        </select>
+                      )}
                     </td>
                     <td>
                       <select
@@ -643,6 +675,16 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4, flexDirection: 'column' }}>
+                        {i.statut === 'attente_validation' && (
+                          <button
+                            className="crm-btn-action crm-btn-action-valider"
+                            onClick={() => handleValider(i.id)}
+                            disabled={!!validating[i.id]}
+                            title="Valider l'inscription et envoyer l'email de confirmation"
+                          >
+                            {validating[i.id] ? '⏳ Envoi…' : '✅ Valider & envoyer'}
+                          </button>
+                        )}
                         <button className="crm-btn-action crm-btn-action-add" onClick={() => setAddEnfantTo(i)} title="Ajouter un enfant">
                           👶 Enfant
                         </button>
