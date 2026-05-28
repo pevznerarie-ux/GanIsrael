@@ -53,25 +53,31 @@ function soldeMessage(parent1Prenom, enfants, solde) {
 }
 
 function exportCSV(inscriptions) {
-  const headers = ['ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone', 'Enfants', 'Classes', 'Semaines', 'Mode paiement accompte', 'Total (€)', 'Acompte (€)', 'Solde (€)', 'Mode paiement solde', 'Statut', 'Reçu envoyé']
-  const rows = inscriptions.map(i => [
-    i.id,
-    i.created_at,
-    `${i.parent1_prenom} ${i.parent1_nom}`,
-    i.parent2_prenom ? `${i.parent2_prenom} ${i.parent2_nom}` : '',
-    i.email,
-    i.telephone,
-    i.enfants.map(e => `${e.prenom} ${e.nom}`).join(' | '),
-    i.enfants.map(e => e.classe).join(' | '),
-    i.enfants.map(e => e.semaines.map(s => `S${s}`).join('+')).join(' | '),
-    i.mode_paiement,
-    i.total,
-    i.accompte,
-    i.total - i.accompte,
-    i.solde_mode_paiement || '',
-    STATUTS[i.statut]?.label || i.statut,
-    i.recu_envoye ? 'Oui' : 'Non',
-  ])
+  const headers = ['ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone', 'Enfants', 'Classes', 'Semaines', 'Mode paiement accompte', 'Total brut (€)', 'Remise (€)', 'Total net (€)', 'Acompte (€)', 'Solde (€)', 'Mode paiement solde', 'Statut', 'Reçu envoyé']
+  const rows = inscriptions.map(i => {
+    const remise = Number(i.remise || 0)
+    const totalNet = Number(i.total) - remise
+    return [
+      i.id,
+      i.created_at,
+      `${i.parent1_prenom} ${i.parent1_nom}`,
+      i.parent2_prenom ? `${i.parent2_prenom} ${i.parent2_nom}` : '',
+      i.email,
+      i.telephone,
+      i.enfants.map(e => `${e.prenom} ${e.nom}`).join(' | '),
+      i.enfants.map(e => e.classe).join(' | '),
+      i.enfants.map(e => e.semaines.map(s => `S${s}`).join('+')).join(' | '),
+      i.mode_paiement,
+      i.total,
+      remise,
+      totalNet,
+      i.accompte,
+      i.total - i.accompte,
+      i.solde_mode_paiement || '',
+      STATUTS[i.statut]?.label || i.statut,
+      i.recu_envoye ? 'Oui' : 'Non',
+    ]
+  })
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -569,6 +575,8 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                 <th>Paiement accompte</th>
                 <th>Mode solde</th>
                 <th>Total / Solde</th>
+                <th>Remise</th>
+                <th>Total net</th>
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
@@ -661,6 +669,36 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                       <div className="td-sub">Acompte : <span style={{ color: '#16a34a', fontWeight: 700 }}>{i.accompte} €</span></div>
                       {solde > 0 && <div className="td-solde">Solde : {solde} €</div>}
                     </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        value={i.remise || 0}
+                        onChange={async e => {
+                          const val = Number(e.target.value)
+                          await fetch(`/api/admin/inscriptions/${i.id}`, {
+                            method: 'PATCH', headers,
+                            body: JSON.stringify({ remise: val }),
+                          })
+                          onInscriptionUpdated()
+                        }}
+                        style={{ width: 65, textAlign: 'center', padding: '3px 6px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: '0.85rem', fontFamily: 'inherit' }}
+                      />
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>€</div>
+                    </td>
+                    <td>
+                      {(() => {
+                        const remise = Number(i.remise || 0)
+                        const totalNet = Number(i.total) - remise
+                        const soldeNet = totalNet - Number(i.accompte)
+                        return (
+                          <>
+                            <div className="td-total" style={{ color: remise > 0 ? '#7c3aed' : '#1e3a8a' }}>{totalNet} €</div>
+                            {soldeNet > 0 && <div className="td-solde">Solde : {soldeNet} €</div>}
+                          </>
+                        )
+                      })()}
+                    </td>
                     <td>
                       <select
                         className="statut-select"
@@ -717,6 +755,32 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                 )
               })}
             </tbody>
+            <tfoot>
+              <tr style={{ background: '#f0f9ff', fontWeight: 700, borderTop: '2px solid #bfdbfe', fontSize: '0.84rem' }}>
+                <td colSpan={7} style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>
+                  Totaux — {filtered.length} inscription{filtered.length > 1 ? 's' : ''}
+                </td>
+                <td style={{ padding: '8px 12px', color: '#1e3a8a' }}>
+                  <div style={{ fontWeight: 800 }}>{filtered.reduce((s, i) => s + Number(i.total), 0)} €</div>
+                  <div style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>
+                    Acc. : {filtered.reduce((s, i) => s + Number(i.accompte), 0)} €
+                  </div>
+                </td>
+                <td style={{ padding: '8px 12px', color: '#dc2626', textAlign: 'center', fontWeight: 800 }}>
+                  -{filtered.reduce((s, i) => s + Number(i.remise || 0), 0)} €
+                </td>
+                <td style={{ padding: '8px 12px', color: '#1e3a8a' }}>
+                  <div style={{ fontWeight: 800 }}>{filtered.reduce((s, i) => s + Number(i.total) - Number(i.remise || 0), 0)} €</div>
+                  <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                    Solde : {filtered.reduce((s, i) => {
+                      const net = Number(i.total) - Number(i.remise || 0)
+                      return s + Math.max(0, net - Number(i.accompte))
+                    }, 0)} €
+                  </div>
+                </td>
+                <td colSpan={2}></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
