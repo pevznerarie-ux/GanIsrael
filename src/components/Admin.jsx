@@ -64,14 +64,19 @@ function isDuplicate(a, b) {
   })
 }
 
-function detectDuplicates(inscriptions) {
+function detectDuplicates(inscriptions, ignoredPairs = []) {
+  const pairKey = (a, b) => `${Math.min(a, b)}-${Math.max(a, b)}`
+  const ignoredSet = new Set(ignoredPairs.map(([a, b]) => pairKey(a, b)))
+
   const n = inscriptions.length
   const parent = Array.from({ length: n }, (_, i) => i)
   const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x] } return x }
   const union = (x, y) => { parent[find(x)] = find(y) }
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++)
-      if (isDuplicate(inscriptions[i], inscriptions[j])) union(i, j)
+      if (isDuplicate(inscriptions[i], inscriptions[j]) &&
+          !ignoredSet.has(pairKey(inscriptions[i].id, inscriptions[j].id)))
+        union(i, j)
   const comps = {}
   for (let i = 0; i < n; i++) {
     const r = find(i)
@@ -262,10 +267,10 @@ function TabDashboard({ inscriptions }) {
 }
 
 // ── Modal fusion doublons ─────────────────────────────────────────────────────
-function ModalDoublons({ inscriptions, user, password, onMerged, onClose }) {
+function ModalDoublons({ inscriptions, user, password, ignoredPairs, onMerged, onIgnore, onClose }) {
   const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
   const base = inscriptions.filter(i => i.statut !== 'annule')
-  const groups = useMemo(() => detectDuplicates(base), [inscriptions])
+  const groups = useMemo(() => detectDuplicates(base, ignoredPairs), [inscriptions, ignoredPairs])
 
   const [keepChoice, setKeepChoice] = useState({})
   const [merging, setMerging]       = useState({})
@@ -429,8 +434,21 @@ function ModalDoublons({ inscriptions, user, password, onMerged, onClose }) {
                           </div>
                         )}
 
-                        {/* Bouton fusionner */}
-                        <div style={{ padding: '0 14px 14px', display: 'flex', justifyContent: 'flex-end' }}>
+                        {/* Boutons actions */}
+                        <div style={{ padding: '0 14px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => {
+                              const ids = group.map(i => i.id)
+                              const pairs = []
+                              for (let a = 0; a < ids.length; a++)
+                                for (let b = a + 1; b < ids.length; b++)
+                                  pairs.push([ids[a], ids[b]])
+                              onIgnore(pairs)
+                            }}
+                            style={{ padding: '0.45rem 1rem', background: '#f8fafc', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: 8, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer', fontSize: '0.84rem' }}
+                          >
+                            🚫 Ne pas fusionner
+                          </button>
                           <button
                             onClick={() => handleMerge(gIdx)}
                             disabled={isMerging}
@@ -665,8 +683,21 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
   const [receiptFeedback, setReceiptFeedback] = useState({})
   const [validating, setValidating] = useState({})
   const [showDoublons, setShowDoublons] = useState(false)
+  const [ignoredPairs, setIgnoredPairs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('gan_doublon_ignore') || '[]') } catch { return [] }
+  })
 
-  const doublonGroups = useMemo(() => detectDuplicates(inscriptions.filter(i => i.statut !== 'annule')), [inscriptions])
+  const addIgnoredPairs = (pairs) => {
+    setIgnoredPairs(prev => {
+      const existing = new Set(prev.map(([a, b]) => `${Math.min(a,b)}-${Math.max(a,b)}`))
+      const toAdd = pairs.filter(([a, b]) => !existing.has(`${Math.min(a,b)}-${Math.max(a,b)}`))
+      const next = [...prev, ...toAdd]
+      localStorage.setItem('gan_doublon_ignore', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const doublonGroups = useMemo(() => detectDuplicates(inscriptions.filter(i => i.statut !== 'annule'), ignoredPairs), [inscriptions, ignoredPairs])
 
   const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
 
@@ -738,7 +769,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
     <div>
       {showSaisie && <FormInscriptionManuelle user={user} password={password} onSaved={onInscriptionAdded} onClose={() => setShowSaisie(false)} />}
       {addEnfantTo && <FormAjoutEnfant inscription={addEnfantTo} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setAddEnfantTo(null)} />}
-      {showDoublons && <ModalDoublons inscriptions={inscriptions} user={user} password={password} onMerged={onInscriptionUpdated} onClose={() => setShowDoublons(false)} />}
+      {showDoublons && <ModalDoublons inscriptions={inscriptions} user={user} password={password} ignoredPairs={ignoredPairs} onMerged={onInscriptionUpdated} onIgnore={addIgnoredPairs} onClose={() => setShowDoublons(false)} />}
 
       {/* Modale confirmation suppression */}
       {confirmDelete && (
