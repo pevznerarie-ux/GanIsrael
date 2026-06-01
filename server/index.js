@@ -467,6 +467,38 @@ app.post('/api/admin/inscriptions/:id/valider', async (req, res) => {
   }
 })
 
+// ── Admin — fusionner deux inscriptions (doublons) ───────────────────────────
+app.post('/api/admin/inscriptions/merge', (req, res) => {
+  if (!authAdmin(req, res)) return
+  const { keepId, deleteId } = req.body
+  if (!keepId || !deleteId) return res.status(400).json({ error: 'Paramètres manquants' })
+
+  const keeper = getInscription(keepId)
+  const other  = getInscription(deleteId)
+  if (!keeper || !other) return res.status(404).json({ error: 'Inscription introuvable' })
+
+  // Fusionner les enfants (dédoublonnage par prénom+nom)
+  const seen = new Set()
+  const enfants = [...keeper.enfants, ...other.enfants].filter(e => {
+    const key = `${(e.prenom || '').toLowerCase()}-${(e.nom || '').toLowerCase()}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  const total    = Number(keeper.total)    + Number(other.total)
+  const accompte = Number(keeper.accompte) + Number(other.accompte)
+
+  // Garder le statut le plus avancé
+  const ORDRE = ['attente_validation', 'en_attente', 'accompte_paye', 'solde_paye', 'archive', 'annule']
+  const statut = ORDRE.indexOf(keeper.statut) >= ORDRE.indexOf(other.statut) ? keeper.statut : other.statut
+
+  updateInscription(keepId, { enfants, total, accompte, statut })
+  deleteInscription(deleteId)
+  console.log(`[Merge] #${deleteId} fusionné dans #${keepId}`)
+  res.json({ ok: true })
+})
+
 // ── Admin — relance email groupée (soldes non réglés) ────────────────────────
 app.post('/api/admin/relance-email', async (req, res) => {
   if (!authAdmin(req, res)) return

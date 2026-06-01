@@ -52,6 +52,35 @@ function soldeMessage(parent1Prenom, enfants, solde) {
   return `Bonjour ${parent1Prenom},\n\nNous vous rappelons qu'un solde de ${solde} € est à régler pour l'inscription de ${noms} au Gan Israel Beth Hillel.\n\nMerci de remettre ce règlement à Mora Elodie avant le 15 juin.\n\nCordialement,\nLa Direction`
 }
 
+// ── Détection des doublons ────────────────────────────────────────────────────
+function isDuplicate(a, b) {
+  if (a.email && b.email && a.email.toLowerCase().trim() === b.email.toLowerCase().trim()) return true
+  const pa = (a.telephone || '').replace(/\D/g, '')
+  const pb = (b.telephone || '').replace(/\D/g, '')
+  if (pa.length >= 9 && pa === pb) return true
+  const na = `${(a.parent1_prenom || '')} ${(a.parent1_nom || '')}`.toLowerCase().trim()
+  const nb = `${(b.parent1_prenom || '')} ${(b.parent1_nom || '')}`.toLowerCase().trim()
+  if (na.length > 3 && na === nb) return true
+  return false
+}
+
+function detectDuplicates(inscriptions) {
+  const n = inscriptions.length
+  const parent = Array.from({ length: n }, (_, i) => i)
+  const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x] } return x }
+  const union = (x, y) => { parent[find(x)] = find(y) }
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++)
+      if (isDuplicate(inscriptions[i], inscriptions[j])) union(i, j)
+  const comps = {}
+  for (let i = 0; i < n; i++) {
+    const r = find(i)
+    if (!comps[r]) comps[r] = []
+    comps[r].push(inscriptions[i])
+  }
+  return Object.values(comps).filter(g => g.length > 1)
+}
+
 function exportCSV(inscriptions) {
   const headers = ['ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone', 'Enfants', 'Classes', 'Semaines', 'Mode paiement accompte', 'Total brut (€)', 'Remise (€)', 'Total net (€)', 'Acompte (€)', 'Solde (€)', 'Mode paiement solde', 'Statut', 'Reçu envoyé']
   const rows = inscriptions.map(i => {
@@ -226,6 +255,199 @@ function TabDashboard({ inscriptions }) {
               </div>
             )
           })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal fusion doublons ─────────────────────────────────────────────────────
+function ModalDoublons({ inscriptions, user, password, onMerged, onClose }) {
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+  const base = inscriptions.filter(i => i.statut !== 'annule')
+  const groups = useMemo(() => detectDuplicates(base), [inscriptions])
+
+  const [keepChoice, setKeepChoice] = useState({})
+  const [merging, setMerging]       = useState({})
+  const [done, setDone]             = useState({})
+  const [errors, setErrors]         = useState({})
+
+  const getKeepId = (gIdx) => keepChoice[gIdx] ?? groups[gIdx]?.[0]?.id
+
+  const handleMerge = async (gIdx) => {
+    const group    = groups[gIdx]
+    const keepId   = getKeepId(gIdx)
+    const toDelete = group.map(i => i.id).filter(id => id !== keepId)
+    setMerging(prev => ({ ...prev, [gIdx]: true }))
+    setErrors(prev => ({ ...prev, [gIdx]: null }))
+    try {
+      for (const deleteId of toDelete) {
+        const res = await fetch('/api/admin/inscriptions/merge', {
+          method: 'POST', headers,
+          body: JSON.stringify({ keepId, deleteId }),
+        })
+        if (!res.ok) throw new Error(`Erreur serveur #${deleteId}`)
+      }
+      setDone(prev => ({ ...prev, [gIdx]: true }))
+      onMerged()
+    } catch (err) {
+      setErrors(prev => ({ ...prev, [gIdx]: err.message || 'Erreur lors de la fusion' }))
+    } finally {
+      setMerging(prev => ({ ...prev, [gIdx]: false }))
+    }
+  }
+
+  return (
+    <div className="crm-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="crm-modal" style={{ maxWidth: 860, width: '95vw', maxHeight: '88vh', overflow: 'auto' }}>
+        <div className="crm-modal-header">
+          <strong>🔀 Fusionner les doublons</strong>
+          <button className="crm-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="crm-modal-body">
+          {groups.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>✅</div>
+              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#16a34a' }}>Aucun doublon détecté</div>
+              <div style={{ color: '#64748b', marginTop: '0.25rem' }}>{base.length} inscriptions analysées (email, téléphone, nom)</div>
+            </div>
+          ) : (
+            <>
+              <p style={{ color: '#64748b', marginBottom: '1.25rem', fontSize: '0.88rem' }}>
+                <strong style={{ color: '#7c3aed' }}>{groups.length} groupe{groups.length > 1 ? 's' : ''} de doublons</strong> détecté{groups.length > 1 ? 's' : ''}.
+                Choisissez quelle inscription garder — les enfants et totaux seront automatiquement combinés.
+              </p>
+
+              {groups.map((group, gIdx) => {
+                const keepId   = getKeepId(gIdx)
+                const toDelete = group.map(i => i.id).filter(id => id !== keepId)
+                const isDone   = done[gIdx]
+                const isMerging = merging[gIdx]
+
+                // Raisons du doublon
+                const reasons = new Set()
+                for (let a = 0; a < group.length; a++) {
+                  for (let b = a + 1; b < group.length; b++) {
+                    const ia = group[a], ib = group[b]
+                    if (ia.email && ib.email && ia.email.toLowerCase().trim() === ib.email.toLowerCase().trim()) reasons.add('email')
+                    const pa = (ia.telephone || '').replace(/\D/g, ''), pb = (ib.telephone || '').replace(/\D/g, '')
+                    if (pa.length >= 9 && pa === pb) reasons.add('téléphone')
+                    const na = `${ia.parent1_prenom || ''} ${ia.parent1_nom || ''}`.toLowerCase().trim()
+                    const nb = `${ib.parent1_prenom || ''} ${ib.parent1_nom || ''}`.toLowerCase().trim()
+                    if (na.length > 3 && na === nb) reasons.add('nom')
+                  }
+                }
+
+                // Prévisualisation résultat fusion
+                const keeper = group.find(i => i.id === keepId)
+                const previewEnfants = (() => {
+                  const seen = new Set()
+                  return group.flatMap(i => i.enfants || []).filter(e => {
+                    const k = `${(e.prenom||'').toLowerCase()}-${(e.nom||'').toLowerCase()}`
+                    if (seen.has(k)) return false
+                    seen.add(k); return true
+                  })
+                })()
+                const previewTotal    = group.reduce((s, i) => s + Number(i.total), 0)
+                const previewAccompte = group.reduce((s, i) => s + Number(i.accompte), 0)
+
+                return (
+                  <div key={gIdx} style={{ border: isDone ? '1.5px solid #bbf7d0' : '1.5px solid #e2e8f0', borderRadius: 10, marginBottom: '1.25rem', background: isDone ? '#f0fdf4' : 'white', overflow: 'hidden' }}>
+                    {/* En-tête groupe */}
+                    <div style={{ background: isDone ? '#dcfce7' : '#fef9ee', padding: '8px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.84rem', color: isDone ? '#15803d' : '#92400e' }}>
+                        {isDone ? '✅ Fusionné avec succès' : `⚠️ Groupe ${gIdx + 1} — ${group.length} inscriptions similaires`}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.3rem' }}>
+                        {[...reasons].map(r => (
+                          <span key={r} style={{ fontSize: '0.72rem', background: '#ede9fe', color: '#6d28d9', padding: '1px 8px', borderRadius: 100, fontWeight: 700 }}>même {r}</span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {!isDone && (
+                      <>
+                        {/* Liste inscriptions sélectionnables */}
+                        <div style={{ padding: '12px 14px 0' }}>
+                          {group.map(insc => {
+                            const isKeeper = insc.id === keepId
+                            return (
+                              <label
+                                key={insc.id}
+                                style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', padding: '10px 12px', borderRadius: 8, marginBottom: '0.6rem', cursor: 'pointer', border: isKeeper ? '2px solid #2563eb' : '1.5px solid #e2e8f0', background: isKeeper ? '#eff6ff' : '#fafafa', transition: 'all .15s' }}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`keep-${gIdx}`}
+                                  value={insc.id}
+                                  checked={isKeeper}
+                                  onChange={() => setKeepChoice(prev => ({ ...prev, [gIdx]: insc.id }))}
+                                  style={{ marginTop: 4, accentColor: '#2563eb', flexShrink: 0 }}
+                                />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: 5 }}>
+                                    <strong style={{ color: '#1e3a8a', fontSize: '0.9rem' }}>#{insc.id}</strong>
+                                    <span style={{ fontWeight: 600 }}>{insc.parent1_prenom} {insc.parent1_nom}</span>
+                                    {insc.parent2_prenom && (
+                                      <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>+ {insc.parent2_prenom} {insc.parent2_nom}</span>
+                                    )}
+                                    <span style={{ fontSize: '0.73rem', background: STATUTS[insc.statut]?.bg, color: STATUTS[insc.statut]?.color, padding: '1px 8px', borderRadius: 100, fontWeight: 700 }}>
+                                      {STATUTS[insc.statut]?.label}
+                                    </span>
+                                    {isKeeper && (
+                                      <span style={{ fontSize: '0.72rem', background: '#dbeafe', color: '#1d4ed8', padding: '1px 8px', borderRadius: 100, fontWeight: 700 }}>✓ À conserver</span>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '1.2rem', fontSize: '0.81rem', color: '#64748b', flexWrap: 'wrap' }}>
+                                    {insc.email    && <span>✉ {insc.email}</span>}
+                                    {insc.telephone && <span>📞 {displayPhone(insc.telephone)}</span>}
+                                    <span>👶 {(insc.enfants || []).map(e => `${e.prenom} ${e.nom}`).join(', ') || '—'}</span>
+                                    <span style={{ fontWeight: 700, color: '#1e3a8a' }}>
+                                      {insc.total} € <span style={{ fontWeight: 400, color: '#16a34a' }}>(acc. {insc.accompte} €)</span>
+                                    </span>
+                                    <span style={{ color: '#94a3b8' }}>{new Date(insc.created_at).toLocaleDateString('fr-FR')}</span>
+                                  </div>
+                                </div>
+                              </label>
+                            )
+                          })}
+                        </div>
+
+                        {/* Prévisualisation résultat */}
+                        <div style={{ margin: '0 14px 10px', padding: '9px 14px', background: '#f0f9ff', borderRadius: 8, fontSize: '0.82rem', color: '#1e3a8a', display: 'flex', gap: '1.2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 700 }}>Résultat :</span>
+                          <span>👶 {previewEnfants.length} enfant{previewEnfants.length > 1 ? 's' : ''}</span>
+                          <span>💰 <strong>{previewTotal} €</strong></span>
+                          <span>✅ <strong style={{ color: '#16a34a' }}>{previewAccompte} €</strong> accompte</span>
+                          <span>⏳ <strong style={{ color: '#dc2626' }}>{previewTotal - previewAccompte} €</strong> solde</span>
+                          <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+                            #{toDelete.join(', #')} sera supprimé{toDelete.length > 1 ? 's' : ''}
+                          </span>
+                        </div>
+
+                        {errors[gIdx] && (
+                          <div style={{ margin: '0 14px 10px', padding: '8px 12px', background: '#fee2e2', borderRadius: 6, fontSize: '0.82rem', color: '#dc2626' }}>
+                            ❌ {errors[gIdx]}
+                          </div>
+                        )}
+
+                        {/* Bouton fusionner */}
+                        <div style={{ padding: '0 14px 14px', display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => handleMerge(gIdx)}
+                            disabled={isMerging}
+                            style={{ padding: '0.5rem 1.4rem', background: isMerging ? '#a5b4fc' : '#4f46e5', color: 'white', border: 'none', borderRadius: 8, fontFamily: 'inherit', fontWeight: 700, cursor: isMerging ? 'not-allowed' : 'pointer', fontSize: '0.88rem' }}
+                          >
+                            {isMerging ? '⏳ Fusion en cours…' : `🔀 Fusionner — garder #${keepId}`}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -444,6 +666,9 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
   const [sendingReceipt, setSendingReceipt] = useState({})
   const [receiptFeedback, setReceiptFeedback] = useState({})
   const [validating, setValidating] = useState({})
+  const [showDoublons, setShowDoublons] = useState(false)
+
+  const doublonGroups = useMemo(() => detectDuplicates(inscriptions.filter(i => i.statut !== 'annule')), [inscriptions])
 
   const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
 
@@ -515,6 +740,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
     <div>
       {showSaisie && <FormInscriptionManuelle user={user} password={password} onSaved={onInscriptionAdded} onClose={() => setShowSaisie(false)} />}
       {addEnfantTo && <FormAjoutEnfant inscription={addEnfantTo} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setAddEnfantTo(null)} />}
+      {showDoublons && <ModalDoublons inscriptions={inscriptions} user={user} password={password} onMerged={onInscriptionUpdated} onClose={() => setShowDoublons(false)} />}
 
       {/* Modale confirmation suppression */}
       {confirmDelete && (
@@ -544,6 +770,15 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="btn-submit" style={{ padding: '0.5rem 1.2rem', fontSize: '0.88rem', whiteSpace: 'nowrap' }} onClick={() => setShowSaisie(true)}>
           + Saisie manuelle
+        </button>
+        <button
+          onClick={() => setShowDoublons(true)}
+          style={{ padding: '0.5rem 1.1rem', fontSize: '0.88rem', whiteSpace: 'nowrap', background: doublonGroups.length > 0 ? '#ede9fe' : '#f1f5f9', color: doublonGroups.length > 0 ? '#6d28d9' : '#64748b', border: doublonGroups.length > 0 ? '1.5px solid #c4b5fd' : '1.5px solid #e2e8f0', borderRadius: 8, fontFamily: 'inherit', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+        >
+          🔀 Doublons
+          {doublonGroups.length > 0 && (
+            <span style={{ background: '#7c3aed', color: 'white', borderRadius: 100, padding: '1px 7px', fontSize: '0.75rem', fontWeight: 800 }}>{doublonGroups.length}</span>
+          )}
         </button>
         <input
           className="crm-search"
