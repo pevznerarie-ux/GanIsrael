@@ -266,6 +266,221 @@ function TabDashboard({ inscriptions }) {
   )
 }
 
+// ── Formulaire d'édition d'une inscription existante ─────────────────────────
+const ENFANT_EDIT_VIDE = {
+  prenom: '', nom: '', dateNaissance: '', classe: 'Gan 1',
+  semaines: [], garderie: [],
+  allergiesAlimentaires: '', traitementEnCours: '', maladiesChroniques: '',
+  vaccinsAJour: true, autorisationSoins: true, autorisationTransport: true,
+}
+
+function FormEditInscription({ inscription, user, password, onSaved, onClose }) {
+  const [form, setForm] = useState(() => ({
+    parent1Prenom: inscription.parent1_prenom || '',
+    parent1Nom:    inscription.parent1_nom || '',
+    parent2Prenom: inscription.parent2_prenom || '',
+    parent2Nom:    inscription.parent2_nom || '',
+    telephone:     inscription.telephone || '',
+    email:         inscription.email || '',
+    modePaiement:  inscription.mode_paiement || 'especes_cheque',
+    total:         inscription.total ?? '',
+    accompte:      inscription.accompte ?? '',
+    statut:        inscription.statut || 'en_attente',
+    enfants: (inscription.enfants || []).map(e => ({
+      prenom:               e.prenom || '',
+      nom:                  e.nom || '',
+      dateNaissance:        e.dateNaissance || '',
+      classe:               e.classe || 'Gan 1',
+      semaines:             e.semaines || [],
+      garderie:             e.garderie || [],
+      allergiesAlimentaires: e.allergiesAlimentaires || '',
+      traitementEnCours:    e.traitementEnCours || '',
+      maladiesChroniques:   e.maladiesChroniques || '',
+      vaccinsAJour:         e.vaccinsAJour ?? true,
+      autorisationSoins:    e.autorisationSoins ?? true,
+      autorisationTransport: e.autorisationTransport ?? true,
+    })),
+  }))
+  const [saving, setSaving] = useState(false)
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  const setField   = (f, v)      => setForm(p => ({ ...p, [f]: v }))
+  const setEnfant  = (idx, f, v) => setForm(p => { const e = [...p.enfants]; e[idx] = { ...e[idx], [f]: v }; return { ...p, enfants: e } })
+  const toggleSem  = (idx, s)    => setForm(p => {
+    const e = [...p.enfants]
+    const sems = e[idx].semaines.includes(s) ? e[idx].semaines.filter(x => x !== s) : [...e[idx].semaines, s]
+    const gard = (e[idx].garderie || []).filter(x => sems.includes(x)) // retire garderie des semaines déselectionnées
+    e[idx] = { ...e[idx], semaines: sems, garderie: gard }
+    return { ...p, enfants: e }
+  })
+  const toggleGarderie = (idx, s) => setForm(p => {
+    const e = [...p.enfants]
+    const gard = (e[idx].garderie || []).includes(s)
+      ? (e[idx].garderie || []).filter(x => x !== s)
+      : [...(e[idx].garderie || []), s]
+    e[idx] = { ...e[idx], garderie: gard }
+    return { ...p, enfants: e }
+  })
+  const addEnfant    = ()    => setForm(p => ({ ...p, enfants: [...p.enfants, { ...ENFANT_EDIT_VIDE }] }))
+  const removeEnfant = (idx) => setForm(p => ({ ...p, enfants: p.enfants.filter((_, i) => i !== idx) }))
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    const payload = {
+      parent1_prenom: form.parent1Prenom,
+      parent1_nom:    form.parent1Nom,
+      parent2_prenom: form.parent2Prenom,
+      parent2_nom:    form.parent2Nom,
+      telephone:      form.telephone,
+      email:          form.email,
+      mode_paiement:  form.modePaiement,
+      total:          Number(form.total),
+      accompte:       Number(form.accompte),
+      statut:         form.statut,
+      enfants:        form.enfants,
+      // Mise à jour de formData pour que les emails futurs utilisent les bonnes données
+      formData: {
+        parent1Prenom: form.parent1Prenom,
+        parent1Nom:    form.parent1Nom,
+        parent2Prenom: form.parent2Prenom,
+        parent2Nom:    form.parent2Nom,
+        telephone:     form.telephone,
+        email:         form.email,
+        modePaiement:  form.modePaiement,
+        total:         Number(form.total),
+        accompte:      Number(form.accompte),
+        enfants:       form.enfants,
+      },
+    }
+    await fetch(`/api/admin/inscriptions/${inscription.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify(payload),
+    })
+    onSaved()
+    setSaving(false)
+    onClose()
+  }
+
+  const sectionStyle = { fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: 800, margin: '1rem 0 0.5rem' }
+
+  return (
+    <div className="crm-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="crm-modal" style={{ maxWidth: 720 }}>
+        <div className="crm-modal-header">
+          <strong>✏️ Modifier #{inscription.id} — {inscription.parent1_prenom} {inscription.parent1_nom}</strong>
+          <button className="crm-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSave} className="crm-modal-body">
+
+          {/* Parents */}
+          <div style={sectionStyle}>Parents</div>
+          <div className="crm-form-row">
+            <div className="form-field"><label>Prénom parent 1 *</label><input required value={form.parent1Prenom} onChange={e => setField('parent1Prenom', e.target.value)} /></div>
+            <div className="form-field"><label>Nom parent 1 *</label><input required value={form.parent1Nom} onChange={e => setField('parent1Nom', e.target.value)} /></div>
+          </div>
+          <div className="crm-form-row">
+            <div className="form-field"><label>Prénom parent 2</label><input value={form.parent2Prenom} onChange={e => setField('parent2Prenom', e.target.value)} /></div>
+            <div className="form-field"><label>Nom parent 2</label><input value={form.parent2Nom} onChange={e => setField('parent2Nom', e.target.value)} /></div>
+          </div>
+          <div className="crm-form-row">
+            <div className="form-field"><label>Téléphone *</label><input required value={form.telephone} onChange={e => setField('telephone', e.target.value)} /></div>
+            <div className="form-field"><label>Email *</label><input required type="email" value={form.email} onChange={e => setField('email', e.target.value)} /></div>
+          </div>
+
+          {/* Enfants */}
+          <div style={sectionStyle}>
+            Enfants
+            <button type="button" onClick={addEnfant} style={{ marginLeft: '0.75rem', fontSize: '0.75rem', padding: '2px 10px', borderRadius: 100, background: '#eff6ff', color: '#2563eb', border: 'none', cursor: 'pointer', fontWeight: 700 }}>+ Ajouter</button>
+          </div>
+          {form.enfants.map((en, idx) => (
+            <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '0.75rem', background: '#fafafa' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <strong style={{ fontSize: '0.85rem', color: '#1e3a8a' }}>Enfant {idx + 1}</strong>
+                {form.enfants.length > 1 && <button type="button" onClick={() => removeEnfant(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '0.8rem' }}>Supprimer</button>}
+              </div>
+              <div className="crm-form-row">
+                <div className="form-field"><label>Prénom *</label><input required value={en.prenom} onChange={e => setEnfant(idx, 'prenom', e.target.value)} /></div>
+                <div className="form-field"><label>Nom *</label><input required value={en.nom} onChange={e => setEnfant(idx, 'nom', e.target.value)} /></div>
+              </div>
+              <div className="crm-form-row">
+                <div className="form-field">
+                  <label>Classe *</label>
+                  <select value={en.classe} onChange={e => setEnfant(idx, 'classe', e.target.value)}>
+                    {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="form-field"><label>Date de naissance</label><input type="date" value={en.dateNaissance} onChange={e => setEnfant(idx, 'dateNaissance', e.target.value)} /></div>
+              </div>
+              <div className="form-field">
+                <label>Semaines *</label>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  {SEMAINES.map(s => (
+                    <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={en.semaines.includes(s.id)} onChange={() => toggleSem(idx, s.id)} />
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {en.semaines.length > 0 && (
+                <div className="form-field">
+                  <label>🌅 Garderie (semaines sélectionnées)</label>
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    {SEMAINES.filter(s => en.semaines.includes(s.id)).map(s => (
+                      <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={(en.garderie || []).includes(s.id)} onChange={() => toggleGarderie(idx, s.id)} />
+                        {s.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="crm-form-row" style={{ marginTop: '0.5rem' }}>
+                <div className="form-field"><label>Allergies alimentaires</label><input value={en.allergiesAlimentaires || ''} onChange={e => setEnfant(idx, 'allergiesAlimentaires', e.target.value)} placeholder="—" /></div>
+                <div className="form-field"><label>Traitement en cours</label><input value={en.traitementEnCours || ''} onChange={e => setEnfant(idx, 'traitementEnCours', e.target.value)} placeholder="—" /></div>
+              </div>
+              {en.maladiesChroniques !== undefined && (
+                <div className="form-field"><label>Maladies chroniques</label><input value={en.maladiesChroniques || ''} onChange={e => setEnfant(idx, 'maladiesChroniques', e.target.value)} placeholder="—" /></div>
+              )}
+            </div>
+          ))}
+
+          {/* Paiement */}
+          <div style={sectionStyle}>Paiement &amp; Statut</div>
+          <div className="crm-form-row">
+            <div className="form-field">
+              <label>Mode de paiement</label>
+              <select value={form.modePaiement} onChange={e => setField('modePaiement', e.target.value)}>
+                <option value="especes_cheque">💵 Espèces / Chèque</option>
+                <option value="cb">💳 Carte bancaire</option>
+                <option value="autre">📋 Autre</option>
+              </select>
+            </div>
+            <div className="form-field">
+              <label>Statut</label>
+              <select value={form.statut} onChange={e => setField('statut', e.target.value)}>
+                {Object.entries(STATUTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="crm-form-row">
+            <div className="form-field"><label>Total (€) *</label><input required type="number" min="0" value={form.total} onChange={e => setField('total', e.target.value)} /></div>
+            <div className="form-field"><label>Acompte reçu (€)</label><input type="number" min="0" value={form.accompte} onChange={e => setField('accompte', e.target.value)} /></div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button type="button" className="btn-refresh" style={{ borderRadius: 8 }} onClick={onClose}>Annuler</button>
+            <button type="submit" className="btn-submit" style={{ padding: '0.5rem 1.5rem' }} disabled={saving}>
+              {saving ? '⏳ Enregistrement…' : '✅ Enregistrer les modifications'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Modal fusion doublons ─────────────────────────────────────────────────────
 function ModalDoublons({ inscriptions, user, password, ignoredPairs, onMerged, onIgnore, onClose }) {
   const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
@@ -683,6 +898,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
   const [receiptFeedback, setReceiptFeedback] = useState({})
   const [validating, setValidating] = useState({})
   const [showDoublons, setShowDoublons] = useState(false)
+  const [editInscription, setEditInscription] = useState(null)
   const [ignoredPairs, setIgnoredPairs] = useState(() => {
     try { return JSON.parse(localStorage.getItem('gan_doublon_ignore') || '[]') } catch { return [] }
   })
@@ -770,6 +986,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
       {showSaisie && <FormInscriptionManuelle user={user} password={password} onSaved={onInscriptionAdded} onClose={() => setShowSaisie(false)} />}
       {addEnfantTo && <FormAjoutEnfant inscription={addEnfantTo} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setAddEnfantTo(null)} />}
       {showDoublons && <ModalDoublons inscriptions={inscriptions} user={user} password={password} ignoredPairs={ignoredPairs} onMerged={onInscriptionUpdated} onIgnore={addIgnoredPairs} onClose={() => setShowDoublons(false)} />}
+      {editInscription && <FormEditInscription inscription={editInscription} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setEditInscription(null)} />}
 
       {/* Modale confirmation suppression */}
       {confirmDelete && (
@@ -978,6 +1195,9 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4, flexDirection: 'column' }}>
+                        <button className="crm-btn-action crm-btn-action-edit" onClick={() => setEditInscription(i)} title="Modifier l'inscription">
+                          ✏️ Modifier
+                        </button>
                         {i.statut === 'attente_validation' && (
                           <button
                             className="crm-btn-action crm-btn-action-valider"

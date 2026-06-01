@@ -2277,6 +2277,7 @@ header, main, footer { position: relative; z-index: 1; }
 .crm-btn-action-delete  { background: #fee2e2; color: #dc2626; }
 .crm-btn-action-valider { background: #dcfce7; color: #15803d; font-weight: 700; }
 .crm-btn-action-valider:disabled { opacity: 0.6; cursor: not-allowed; }
+.crm-btn-action-edit    { background: #ede9fe; color: #5b21b6; }
 
 /* Dropdowns mode paiement (accompte + solde) — même style */
 .paiement-mode-select,
