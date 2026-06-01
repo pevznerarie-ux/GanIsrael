@@ -53,15 +53,15 @@ function soldeMessage(parent1Prenom, enfants, solde) {
 }
 
 // ── Détection des doublons ────────────────────────────────────────────────────
+// Doublon = même nom d'enfant dans deux inscriptions distinctes
 function isDuplicate(a, b) {
-  if (a.email && b.email && a.email.toLowerCase().trim() === b.email.toLowerCase().trim()) return true
-  const pa = (a.telephone || '').replace(/\D/g, '')
-  const pb = (b.telephone || '').replace(/\D/g, '')
-  if (pa.length >= 9 && pa === pb) return true
-  const na = `${(a.parent1_prenom || '')} ${(a.parent1_nom || '')}`.toLowerCase().trim()
-  const nb = `${(b.parent1_prenom || '')} ${(b.parent1_nom || '')}`.toLowerCase().trim()
-  if (na.length > 3 && na === nb) return true
-  return false
+  const keysB = new Set(
+    (b.enfants || []).map(e => `${(e.prenom || '').toLowerCase().trim()}-${(e.nom || '').toLowerCase().trim()}`)
+  )
+  return (a.enfants || []).some(e => {
+    const k = `${(e.prenom || '').toLowerCase().trim()}-${(e.nom || '').toLowerCase().trim()}`
+    return k.length > 2 && keysB.has(k)
+  })
 }
 
 function detectDuplicates(inscriptions) {
@@ -324,17 +324,15 @@ function ModalDoublons({ inscriptions, user, password, onMerged, onClose }) {
                 const isDone   = done[gIdx]
                 const isMerging = merging[gIdx]
 
-                // Raisons du doublon
+                // Enfants en doublon
                 const reasons = new Set()
                 for (let a = 0; a < group.length; a++) {
                   for (let b = a + 1; b < group.length; b++) {
-                    const ia = group[a], ib = group[b]
-                    if (ia.email && ib.email && ia.email.toLowerCase().trim() === ib.email.toLowerCase().trim()) reasons.add('email')
-                    const pa = (ia.telephone || '').replace(/\D/g, ''), pb = (ib.telephone || '').replace(/\D/g, '')
-                    if (pa.length >= 9 && pa === pb) reasons.add('téléphone')
-                    const na = `${ia.parent1_prenom || ''} ${ia.parent1_nom || ''}`.toLowerCase().trim()
-                    const nb = `${ib.parent1_prenom || ''} ${ib.parent1_nom || ''}`.toLowerCase().trim()
-                    if (na.length > 3 && na === nb) reasons.add('nom')
+                    const keysB = new Set((group[b].enfants || []).map(e => `${(e.prenom||'').toLowerCase().trim()}-${(e.nom||'').toLowerCase().trim()}`))
+                    ;(group[a].enfants || []).forEach(e => {
+                      const k = `${(e.prenom||'').toLowerCase().trim()}-${(e.nom||'').toLowerCase().trim()}`
+                      if (k.length > 2 && keysB.has(k)) reasons.add(`${e.prenom} ${e.nom}`)
+                    })
                   }
                 }
 
@@ -358,9 +356,9 @@ function ModalDoublons({ inscriptions, user, password, onMerged, onClose }) {
                       <div style={{ fontWeight: 700, fontSize: '0.84rem', color: isDone ? '#15803d' : '#92400e' }}>
                         {isDone ? '✅ Fusionné avec succès' : `⚠️ Groupe ${gIdx + 1} — ${group.length} inscriptions similaires`}
                       </div>
-                      <div style={{ display: 'flex', gap: '0.3rem' }}>
+                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                         {[...reasons].map(r => (
-                          <span key={r} style={{ fontSize: '0.72rem', background: '#ede9fe', color: '#6d28d9', padding: '1px 8px', borderRadius: 100, fontWeight: 700 }}>même {r}</span>
+                          <span key={r} style={{ fontSize: '0.72rem', background: '#ede9fe', color: '#6d28d9', padding: '1px 8px', borderRadius: 100, fontWeight: 700 }}>👶 {r}</span>
                         ))}
                       </div>
                     </div>
