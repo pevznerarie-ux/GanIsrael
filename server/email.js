@@ -2,7 +2,7 @@ import { Resend } from 'resend'
 import 'dotenv/config'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const LOGO_URL = `${process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'}/logo-gan-israel.jpeg`
+const LOGO_URL = `${process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'}/logo-gan-israel.png`
 
 const SEMAINE_LABELS = { 1: '6–10 juillet', 2: '13–17 juillet', 3: '20–24 juillet' }
 const basePrice = (n) => n === 3 ? 525 : n * 180
@@ -159,6 +159,102 @@ export async function sendReceiptToParent(data, inscriptionId, pdfBuffer) {
         content: pdfBuffer,
       },
     ],
+  })
+}
+
+// ── Relance de solde aux parents ─────────────────────────────────────────────
+export async function sendReminderToParent(insc) {
+  const email   = insc.email
+  const prenom  = insc.parent1_prenom
+  const nom     = insc.parent1_nom
+  const enfants = insc.enfants || []
+  const solde   = Number(insc.total) - Number(insc.accompte)
+  const enfantsNoms = enfants.map(e => `${e.prenom} ${e.nom}`).join(' et ')
+
+  const semainesHtml = enfants.map(e => {
+    const lignes = e.semaines.map(s => {
+      const hasGarderie = e.garderie?.includes(s)
+      return `S${s} — ${SEMAINE_LABELS[s]}${hasGarderie ? ' <em>(+ garderie)</em>' : ''}`
+    }).join('<br>')
+    return `<tr>
+      <td style="padding:6px 12px;border-bottom:1px solid #e2e8f0">${e.prenom} ${e.nom}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #e2e8f0">${e.classe}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #e2e8f0">${lignes}</td>
+    </tr>`
+  }).join('')
+
+  await resend.emails.send({
+    from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
+    to: email,
+    subject: `⚠️ Rappel règlement — Solde de ${solde} € à régler — Gan Israel Beth Hillel`,
+    html: `
+<!DOCTYPE html>
+<html lang="fr">
+<body style="font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;margin:0;padding:20px">
+<div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+
+  <div style="background:#1e3a8a;padding:24px 32px;text-align:center">
+    <img src="${LOGO_URL}" alt="Gan Israel Beth Hillel" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);margin-bottom:10px;display:block;margin-left:auto;margin-right:auto" />
+    <h1 style="color:white;margin:0;font-size:20px;font-weight:800">Gan Israel Beth Hillel</h1>
+    <p style="color:#93c5fd;margin:4px 0 0;font-size:13px">Centre Aéré Maternelle — Levallois-Perret</p>
+  </div>
+
+  <div style="padding:32px">
+    <p style="color:#475569;margin:0 0 16px;font-size:15px">Bonjour <strong>${prenom} ${nom}</strong>,</p>
+
+    <div style="background:#fff7ed;border-left:4px solid #f97316;padding:16px;border-radius:0 8px 8px 0;margin-bottom:24px">
+      <p style="margin:0 0 8px;color:#9a3412;font-size:16px;font-weight:700">
+        Un solde de <strong>${solde} €</strong> reste à régler pour l'inscription de <strong>${enfantsNoms}</strong>.
+      </p>
+      <p style="margin:0;color:#9a3412;font-size:14px">
+        Merci de remettre ce règlement en espèces ou par chèque à l'ordre de <strong>Beth Menahem Lis</strong>
+        à <strong>Mora Elodie</strong> avant le <strong>15 juin</strong> au plus tard.
+      </p>
+    </div>
+
+    <h3 style="color:#1e3a8a;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 10px">Récapitulatif de l'inscription</h3>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px">
+      <thead>
+        <tr style="background:#eff6ff">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;color:#475569;text-transform:uppercase">Enfant</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;color:#475569;text-transform:uppercase">Classe</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;color:#475569;text-transform:uppercase">Semaines</th>
+        </tr>
+      </thead>
+      <tbody>${semainesHtml}</tbody>
+    </table>
+
+    <table width="100%" style="margin-bottom:24px">
+      <tr>
+        <td style="padding:4px 0;color:#475569">Total inscription</td>
+        <td style="padding:4px 0;text-align:right;font-weight:800;color:#1e3a8a;font-size:18px">${insc.total} €</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 0;color:#475569">Acompte déjà réglé</td>
+        <td style="padding:4px 0;text-align:right;color:#16a34a;font-weight:700">${insc.accompte} € ✓</td>
+      </tr>
+      <tr style="border-top:2px solid #e2e8f0">
+        <td style="padding:8px 0;color:#9a3412;font-weight:700">Solde restant</td>
+        <td style="padding:8px 0;text-align:right;font-weight:800;color:#dc2626;font-size:20px">${solde} €</td>
+      </tr>
+    </table>
+
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:24px">
+      <p style="margin:0;font-size:14px;color:#991b1b">
+        📅 <strong>Date limite : 15 juin</strong> — Règlement en espèces ou par chèque à l'ordre de <strong>Beth Menahem Lis</strong>, à remettre à Mora Elodie.
+      </p>
+    </div>
+
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+    <p style="color:#1e3a8a;font-size:14px;font-weight:700;margin:0 0 4px">La Direction</p>
+    <p style="color:#94a3b8;font-size:12px;margin:0">
+      Gan Israel Beth Hillel · 89 rue Carnot, 92300 Levallois-Perret<br>
+      <a href="mailto:ganisrael@bethmenahem-lis.com" style="color:#2563eb">ganisrael@bethmenahem-lis.com</a>
+    </p>
+  </div>
+</div>
+</body>
+</html>`,
   })
 }
 

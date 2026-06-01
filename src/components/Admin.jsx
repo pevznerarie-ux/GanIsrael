@@ -95,7 +95,8 @@ function TabDashboard({ inscriptions }) {
   // Exclure les annulés et archivés de tous les calculs financiers
   const actives = inscriptions.filter(i => i.statut !== 'annule' && i.statut !== 'archive')
 
-  const totalEnfants = inscriptions.filter(i => i.statut !== 'annule').reduce((s, i) => s + i.enfants.length, 0)
+  const nonAnnules = inscriptions.filter(i => i.statut !== 'annule')
+  const totalEnfants = nonAnnules.reduce((s, i) => s + i.enfants.length, 0)
   const totalRevenu = actives.reduce((s, i) => s + Number(i.total), 0)
 
   // L'acompte est TOUJOURS 50 €/enfant, peu importe le mode de paiement.
@@ -135,7 +136,7 @@ function TabDashboard({ inscriptions }) {
       {/* Cartes stats */}
       <div className="admin-stats" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
         {[
-          { label: 'Familles', value: actives.length, icon: '👨‍👩‍👧' },
+          { label: 'Familles', value: nonAnnules.length, icon: '👨‍👩‍👧' },
           { label: 'Enfants', value: totalEnfants, icon: '👶' },
           { label: 'Revenus prévus', value: `${totalRevenu} €`, icon: '💰' },
           { label: 'Acomptes reçus', value: `${totalAccomptes} €`, icon: '✅' },
@@ -1396,8 +1397,28 @@ function TabClasses({ inscriptions }) {
 }
 
 // ── Onglet WhatsApp & Soldes ──────────────────────────────────────────────────
-function TabWhatsapp({ inscriptions }) {
+function TabWhatsapp({ inscriptions, user, password }) {
   const [copiedId, setCopiedId] = useState(null)
+  const [relancing, setRelancing] = useState(false)
+  const [relanceResult, setRelanceResult] = useState(null)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  const handleRelanceEmail = async () => {
+    setShowConfirm(false)
+    setRelancing(true)
+    setRelanceResult(null)
+    try {
+      const res = await fetch('/api/admin/relance-email', { method: 'POST', headers })
+      const data = await res.json()
+      setRelanceResult(data)
+    } catch {
+      setRelanceResult({ ok: false, error: 'Erreur réseau' })
+    } finally {
+      setRelancing(false)
+    }
+  }
 
   const avecSolde = useMemo(() =>
     inscriptions
@@ -1442,6 +1463,33 @@ function TabWhatsapp({ inscriptions }) {
 
   return (
     <div>
+      {/* Modale confirmation relance */}
+      {showConfirm && (
+        <div className="crm-modal-overlay" onClick={() => setShowConfirm(false)}>
+          <div className="crm-modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+            <div className="crm-modal-header" style={{ background: '#fff7ed' }}>
+              <strong style={{ color: '#9a3412' }}>📧 Relance email — confirmation</strong>
+              <button className="crm-modal-close" onClick={() => setShowConfirm(false)}>✕</button>
+            </div>
+            <div className="crm-modal-body">
+              <p style={{ color: '#475569', marginBottom: '1rem', lineHeight: 1.6 }}>
+                Tu es sur le point d'envoyer un email de rappel de solde à <strong style={{ color: '#9a3412' }}>{avecSolde.length} famille{avecSolde.length > 1 ? 's' : ''}</strong> (total : <strong>{totalRestant} €</strong>).<br />
+                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Chaque parent recevra un email avec son solde restant et la date limite de paiement.</span>
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button className="btn-refresh" style={{ borderRadius: 8 }} onClick={() => setShowConfirm(false)}>Annuler</button>
+                <button
+                  onClick={handleRelanceEmail}
+                  style={{ padding: '0.5rem 1.4rem', background: '#f97316', color: 'white', border: 'none', borderRadius: 8, fontFamily: 'inherit', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
+                >
+                  📧 Envoyer {avecSolde.length} email{avecSolde.length > 1 ? 's' : ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rappels de solde */}
       <div className="crm-card" style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -1449,6 +1497,24 @@ function TabWhatsapp({ inscriptions }) {
             <div className="crm-card-title" style={{ margin: 0 }}>Soldes à encaisser</div>
             <div style={{ fontSize: '0.85rem', color: '#64748b' }}>{avecSolde.length} famille{avecSolde.length > 1 ? 's' : ''} — total restant : <strong style={{ color: '#dc2626' }}>{totalRestant} €</strong></div>
           </div>
+          {avecSolde.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+              <button
+                onClick={() => { setRelanceResult(null); setShowConfirm(true) }}
+                disabled={relancing}
+                style={{ padding: '0.45rem 1.1rem', background: relancing ? '#fed7aa' : '#fff7ed', color: '#9a3412', border: '1.5px solid #fed7aa', borderRadius: 8, fontFamily: 'inherit', fontWeight: 700, cursor: relancing ? 'not-allowed' : 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                {relancing ? '⏳ Envoi en cours…' : '📧 Relance email générale'}
+              </button>
+              {relanceResult && (
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: relanceResult.errors?.length ? '#92400e' : '#15803d' }}>
+                  {relanceResult.ok
+                    ? `✅ ${relanceResult.sent} email${relanceResult.sent > 1 ? 's' : ''} envoyé${relanceResult.sent > 1 ? 's' : ''}${relanceResult.errors?.length ? ` · ⚠ ${relanceResult.errors.length} erreur(s)` : ''}`
+                    : '❌ Erreur lors de l\'envoi'}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {avecSolde.length === 0 ? (
@@ -1746,7 +1812,7 @@ export default function Admin() {
           onInscriptionUpdated={() => fetchInscriptions(user, password)}
         />}
         {tab === 'classes'   && <TabClasses inscriptions={inscriptions} />}
-        {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} />}
+        {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} user={user} password={password} />}
         {tab === 'analytics' && role === 'admin' && <TabAnalytics user={user} password={password} />}
         {tab === 'visiteurs' && role === 'admin' && <TabVisiteurs user={user} password={password} />}
       </div>

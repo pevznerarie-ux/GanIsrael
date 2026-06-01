@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
 import { insertInscription, getInscription, markEmailSent, markReceiptSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
-import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent } from './email.js'
+import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent, sendReminderToParent } from './email.js'
 import { generateReceiptPDF } from './receipt.js'
 
 const app = express()
@@ -465,6 +465,33 @@ app.post('/api/admin/inscriptions/:id/valider', async (req, res) => {
     console.error('[valider]', err.message)
     res.status(500).json({ error: err.message })
   }
+})
+
+// ── Admin — relance email groupée (soldes non réglés) ────────────────────────
+app.post('/api/admin/relance-email', async (req, res) => {
+  if (!authAdmin(req, res)) return
+
+  const all = getAllInscriptions()
+  const avecSolde = all.filter(i =>
+    i.statut !== 'annule' &&
+    i.statut !== 'solde_paye' &&
+    (Number(i.total) - Number(i.accompte)) > 0 &&
+    i.email
+  )
+
+  let sent = 0, errors = []
+  for (const insc of avecSolde) {
+    try {
+      await sendReminderToParent(insc)
+      sent++
+      console.log(`[Relance] ✓ ${insc.parent1_prenom} ${insc.parent1_nom} <${insc.email}>`)
+    } catch (err) {
+      errors.push({ id: insc.id, email: insc.email, error: err.message })
+      console.error(`[Relance] ✗ #${insc.id} ${insc.email}: ${err.message}`)
+    }
+  }
+
+  res.json({ ok: true, sent, errors, total: avecSolde.length })
 })
 
 // Servir le build React en production
