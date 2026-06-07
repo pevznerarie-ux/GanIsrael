@@ -896,6 +896,8 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [sendingReceipt, setSendingReceipt] = useState({})
   const [receiptFeedback, setReceiptFeedback] = useState({})
+  const [sendingRetry, setSendingRetry] = useState({})
+  const [retryFeedback, setRetryFeedback] = useState({})
   const [validating, setValidating] = useState({})
   const [showDoublons, setShowDoublons] = useState(false)
   const [editInscription, setEditInscription] = useState(null)
@@ -937,6 +939,21 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
     } finally {
       setSendingReceipt(prev => ({ ...prev, [id]: false }))
       setTimeout(() => setReceiptFeedback(prev => ({ ...prev, [id]: null })), 4000)
+    }
+  }
+
+  const handleSendRetry = async (id) => {
+    setSendingRetry(prev => ({ ...prev, [id]: true }))
+    setRetryFeedback(prev => ({ ...prev, [id]: null }))
+    try {
+      const res = await fetch(`/api/admin/inscriptions/${id}/relance-paiement`, { method: 'POST', headers })
+      if (!res.ok) throw new Error()
+      setRetryFeedback(prev => ({ ...prev, [id]: 'ok' }))
+    } catch {
+      setRetryFeedback(prev => ({ ...prev, [id]: 'error' }))
+    } finally {
+      setSendingRetry(prev => ({ ...prev, [id]: false }))
+      setTimeout(() => setRetryFeedback(prev => ({ ...prev, [id]: null })), 4000)
     }
   }
 
@@ -1206,6 +1223,26 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                             title="Valider l'inscription et envoyer l'email de confirmation"
                           >
                             {validating[i.id] ? '⏳ Envoi…' : '✅ Valider & envoyer'}
+                          </button>
+                        )}
+                        {i.statut === 'en_attente' && (
+                          <button
+                            className={`crm-btn-action${
+                              retryFeedback[i.id] === 'ok'    ? ' crm-btn-action-valider' :
+                              retryFeedback[i.id] === 'error' ? ' crm-btn-action-delete'  :
+                              ' crm-btn-action-retry'
+                            }`}
+                            onClick={() => handleSendRetry(i.id)}
+                            disabled={!!sendingRetry[i.id]}
+                            title="Envoyer un email : paiement non abouti, lien pour réessayer"
+                          >
+                            {sendingRetry[i.id]
+                              ? '⏳ Envoi…'
+                              : retryFeedback[i.id] === 'ok'
+                              ? '✅ Email envoyé'
+                              : retryFeedback[i.id] === 'error'
+                              ? '❌ Erreur'
+                              : '💳 Paiement ?'}
                           </button>
                         )}
                         <button className="crm-btn-action crm-btn-action-add" onClick={() => setAddEnfantTo(i)} title="Ajouter un enfant">

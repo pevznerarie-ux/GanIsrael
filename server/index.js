@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
 import { insertInscription, getInscription, markEmailSent, markReceiptSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
-import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent, sendReminderToParent } from './email.js'
+import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent, sendReminderToParent, sendPaymentRetryEmail } from './email.js'
 import { generateReceiptPDF } from './receipt.js'
 
 const app = express()
@@ -377,6 +377,21 @@ app.post('/api/admin/inscriptions/:id/send-receipt', async (req, res) => {
     res.json({ ok: true })
   } catch (err) {
     console.error('[Reçu] ✗ ERREUR:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Admin — relance paiement non abouti ──────────────────────────────────────
+app.post('/api/admin/inscriptions/:id/relance-paiement', async (req, res) => {
+  if (!authAdmin(req, res)) return
+  const inscription = getInscription(req.params.id)
+  if (!inscription) return res.status(404).json({ error: 'Inscription introuvable' })
+  try {
+    await sendPaymentRetryEmail(inscription)
+    console.log(`[Relance paiement] ✓ #${inscription.id} → ${inscription.email}`)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[Relance paiement] ✗', err.message)
     res.status(500).json({ error: err.message })
   }
 })
