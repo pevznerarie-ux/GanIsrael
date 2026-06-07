@@ -1225,24 +1225,24 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                             {validating[i.id] ? '⏳ Envoi…' : '✅ Valider & envoyer'}
                           </button>
                         )}
-                        {i.statut === 'en_attente' && (
+                        {i.statut !== 'solde_paye' && i.statut !== 'annule' && i.statut !== 'archive' && (
                           <button
                             className={`crm-btn-action${
                               retryFeedback[i.id] === 'ok'    ? ' crm-btn-action-valider' :
                               retryFeedback[i.id] === 'error' ? ' crm-btn-action-delete'  :
-                              ' crm-btn-action-retry'
+                              ' crm-btn-action-helloasso'
                             }`}
                             onClick={() => handleSendRetry(i.id)}
                             disabled={!!sendingRetry[i.id]}
-                            title="Envoyer un email : paiement non abouti, lien pour réessayer"
+                            title="Générer un lien HelloAsso et l'envoyer par email (si le parent veut payer en CB)"
                           >
                             {sendingRetry[i.id]
                               ? '⏳ Envoi…'
                               : retryFeedback[i.id] === 'ok'
-                              ? '✅ Email envoyé'
+                              ? '✅ Lien envoyé'
                               : retryFeedback[i.id] === 'error'
                               ? '❌ Erreur'
-                              : '💳 Paiement ?'}
+                              : '🔗 HelloAsso'}
                           </button>
                         )}
                         <button className="crm-btn-action crm-btn-action-add" onClick={() => setAddEnfantTo(i)} title="Ajouter un enfant">
