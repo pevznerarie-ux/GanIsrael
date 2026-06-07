@@ -258,14 +258,16 @@ export async function sendReminderToParent(insc) {
   })
 }
 
-// ── Relance paiement non abouti ───────────────────────────────────────────────
-export async function sendPaymentRetryEmail(insc) {
+// ── Relance paiement non abouti (lien HelloAsso personnalisé) ────────────────
+export async function sendPaymentRetryEmail(insc, checkoutUrl) {
   const email   = insc.email || insc.formData?.email
   const prenom  = insc.parent1_prenom || insc.formData?.parent1Prenom
   const nom     = insc.parent1_nom    || insc.formData?.parent1Nom
   const enfants = insc.enfants || []
   const enfantsNoms = enfants.map(e => `${e.prenom} ${e.nom}`).join(' et ') || 'votre enfant'
-  const SITE_URL = 'https://www.gis-levallois.fr'
+  const soldeRestant = Number(insc.total) - Number(insc.accompte)
+  const montant = soldeRestant > 0 ? soldeRestant : Number(insc.total)
+  const isFullCB = insc.mode_paiement === 'cb'
 
   await resend.emails.send({
     from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
@@ -288,23 +290,25 @@ export async function sendPaymentRetryEmail(insc) {
 
     <div style="background:#fff7ed;border-left:4px solid #f97316;padding:16px;border-radius:0 8px 8px 0;margin-bottom:24px">
       <p style="margin:0 0 10px;color:#9a3412;font-size:16px;font-weight:700">
-        Votre demande d'inscription pour <strong>${enfantsNoms}</strong> au Gan Israel a bien été reçue, mais votre paiement ne semble pas avoir abouti.
+        Votre demande d'inscription pour <strong>${enfantsNoms}</strong> au Gan Israel a bien été reçue, mais votre paiement de <strong>${montant} €</strong> n'a pas abouti.
       </p>
       <p style="margin:0;color:#9a3412;font-size:14px;line-height:1.6">
-        Pour finaliser votre inscription, veuillez recommencer le processus en cliquant sur le lien ci-dessous.
+        Nous vous avons préparé un lien de paiement direct — cliquez simplement sur le bouton ci-dessous pour finaliser votre inscription en quelques secondes.
       </p>
     </div>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="${SITE_URL}" style="display:inline-block;background:#1e3a8a;color:white;text-decoration:none;padding:14px 36px;border-radius:10px;font-size:16px;font-weight:800;letter-spacing:0.02em">
-        👉 Finaliser mon inscription
+      <a href="${checkoutUrl}" style="display:inline-block;background:#16a34a;color:white;text-decoration:none;padding:16px 40px;border-radius:10px;font-size:17px;font-weight:800;letter-spacing:0.02em">
+        💳 Payer ${montant} € et finaliser mon inscription
       </a>
-      <div style="margin-top:10px;font-size:13px;color:#94a3b8">${SITE_URL}</div>
+      <div style="margin-top:12px;font-size:12px;color:#94a3b8">
+        Paiement sécurisé via HelloAsso${isFullCB ? ' — paiement total' : ' — acompte de réservation'}
+      </div>
     </div>
 
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-bottom:24px">
       <p style="margin:0;font-size:13px;color:#1e40af;line-height:1.6">
-        💡 Si vous rencontrez à nouveau un problème, n'hésitez pas à nous contacter directement par email ou WhatsApp — nous trouverons une solution.
+        💡 Ce lien est valable pendant 24h. Si vous rencontrez un problème, contactez-nous directement par email ou WhatsApp.
       </p>
     </div>
 

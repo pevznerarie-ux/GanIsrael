@@ -136,6 +136,7 @@ export function insertInscription(data) {
     recu_envoye:           false,
     accompte_mode_paiement: 'cb',
     solde_mode_paiement:   '',
+    remise:                0,
     formData:              data,
   })
   save(db)
@@ -152,7 +153,8 @@ export function markEmailSent(id) {
   const item = db.inscriptions.find(i => i.id === +id)
   if (item) {
     item.email_envoye = true
-    // Paiement CB = total réglé en intégralité → statut soldé
+    // CB = paiement total → on s'assure qu'accompte reflète le total
+    if (item.mode_paiement === 'cb') item.accompte = Number(item.total)
     const isFullyPaid = item.mode_paiement === 'cb' || Number(item.accompte) >= Number(item.total)
     item.statut = isFullyPaid ? 'solde_paye' : 'accompte_paye'
   }

@@ -386,9 +386,60 @@ app.post('/api/admin/inscriptions/:id/relance-paiement', async (req, res) => {
   if (!authAdmin(req, res)) return
   const inscription = getInscription(req.params.id)
   if (!inscription) return res.status(404).json({ error: 'Inscription introuvable' })
+
   try {
-    await sendPaymentRetryEmail(inscription)
-    console.log(`[Relance paiement] ✓ #${inscription.id} → ${inscription.email}`)
+    const base = process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'
+    // Montant à payer : accompte si déjà versé un acompte (solde restant = total - accompte),
+    // sinon paiement complet (total)
+    const soldeRestant = Number(inscription.total) - Number(inscription.accompte)
+    const amount = soldeRestant > 0 ? soldeRestant : Number(inscription.total)
+    const returnUrl = `${base}?merci=1&id=${inscription.id}`
+
+    let checkoutUrl
+
+    if (process.env.TEST_MODE === 'true') {
+      console.log('[TEST MODE] Relance paiement — HelloAsso ignoré')
+      checkoutUrl = returnUrl
+    } else {
+      const token = await getToken()
+      const slug = process.env.HELLOASSO_ORG_SLUG
+      const itemName = `Gan Israel — Inscription #${inscription.id}`
+      console.log(`[Relance HelloAsso] slug="${slug}" amount=${Math.round(amount * 100)} return=${returnUrl}`)
+
+      const response = await fetch(
+        `${HA_BASE}/v5/organizations/${slug}/checkout-intents`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            totalAmount:      Math.round(amount * 100),
+            initialAmount:    Math.round(amount * 100),
+            itemName,
+            backUrl:          base,
+            errorUrl:         base,
+            returnUrl,
+            containsDonation: false,
+          }),
+        }
+      )
+
+      const rawText = await response.text()
+      console.log(`[Relance HelloAsso] HTTP ${response.status}: ${rawText}`)
+      if (!response.ok) {
+        return res.status(502).json({ error: 'HelloAsso error', status: response.status, body: rawText })
+      }
+      const data = JSON.parse(rawText)
+      if (!data.redirectUrl) {
+        return res.status(502).json({ error: 'HelloAsso no redirectUrl', details: data })
+      }
+      checkoutUrl = data.redirectUrl
+    }
+
+    await sendPaymentRetryEmail(inscription, checkoutUrl)
+    console.log(`[Relance paiement] ✓ #${inscription.id} → ${inscription.email} (${amount}€)`)
     res.json({ ok: true })
   } catch (err) {
     console.error('[Relance paiement] ✗', err.message)
