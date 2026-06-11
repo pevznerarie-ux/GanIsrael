@@ -87,31 +87,47 @@ function detectDuplicates(inscriptions, ignoredPairs = []) {
 }
 
 function exportCSV(inscriptions) {
-  const headers = ['ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone', 'Enfants', 'Classes', 'Semaines', 'Mode paiement accompte', 'Total brut (€)', 'Remise (€)', 'Total net (€)', 'Acompte (€)', 'Solde (€)', 'Mode paiement solde', 'Statut', 'Reçu envoyé']
-  const rows = inscriptions.map(i => {
-    const remise = Number(i.remise || 0)
+  const headers = [
+    'ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone',
+    'Enfant', 'Classe',
+    'S1 (6–10 juil)', 'S2 (13–17 juil)', 'S3 (20–24 juil)',
+    'Garderie S1', 'Garderie S2', 'Garderie S3',
+    'Mode paiement', 'Total brut (€)', 'Remise (€)', 'Total net (€)', 'Acompte (€)', 'Solde (€)',
+    'Mode solde', 'Statut', 'Reçu envoyé',
+  ]
+  const rows = []
+  for (const i of inscriptions) {
+    const remise   = Number(i.remise || 0)
     const totalNet = Number(i.total) - remise
-    return [
-      i.id,
-      i.created_at,
-      `${i.parent1_prenom} ${i.parent1_nom}`,
-      i.parent2_prenom ? `${i.parent2_prenom} ${i.parent2_nom}` : '',
-      i.email,
-      i.telephone,
-      i.enfants.map(e => `${e.prenom} ${e.nom}`).join(' | '),
-      i.enfants.map(e => e.classe).join(' | '),
-      i.enfants.map(e => e.semaines.map(s => `S${s}`).join('+')).join(' | '),
-      i.mode_paiement,
-      i.total,
-      remise,
-      totalNet,
-      i.accompte,
-      i.total - i.accompte,
-      i.solde_mode_paiement || '',
-      STATUTS[i.statut]?.label || i.statut,
-      i.recu_envoye ? 'Oui' : 'Non',
-    ]
-  })
+    const solde    = Number(i.total) - Number(i.accompte)
+    for (const e of (i.enfants || [])) {
+      rows.push([
+        i.id,
+        new Date(i.created_at).toLocaleDateString('fr-FR'),
+        `${i.parent1_prenom} ${i.parent1_nom}`,
+        i.parent2_prenom ? `${i.parent2_prenom} ${i.parent2_nom}` : '',
+        i.email,
+        i.telephone,
+        `${e.prenom} ${e.nom}`,
+        e.classe || '',
+        e.semaines?.includes(1) ? 'X' : '',
+        e.semaines?.includes(2) ? 'X' : '',
+        e.semaines?.includes(3) ? 'X' : '',
+        e.garderie?.includes(1) ? 'X' : '',
+        e.garderie?.includes(2) ? 'X' : '',
+        e.garderie?.includes(3) ? 'X' : '',
+        i.mode_paiement || '',
+        i.total,
+        remise,
+        totalNet,
+        i.accompte,
+        solde,
+        i.solde_mode_paiement || '',
+        STATUTS[i.statut]?.label || i.statut,
+        i.recu_envoye ? 'Oui' : 'Non',
+      ])
+    }
+  }
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
