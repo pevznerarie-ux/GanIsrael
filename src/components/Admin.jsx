@@ -91,7 +91,7 @@ function exportCSV(inscriptions) {
     'ID', 'Date', 'Parent 1', 'Parent 2', 'Email', 'Téléphone',
     'Enfant', 'Classe',
     'S1 (6–10 juil)', 'S2 (13–17 juil)', 'S3 (20–24 juil)',
-    'Garderie S1', 'Garderie S2', 'Garderie S3',
+    'GS1', 'GS2', 'GS3',
     'Mode paiement', 'Total brut (€)', 'Remise (€)', 'Total net (€)', 'Acompte (€)', 'Solde (€)',
     'Mode solde', 'Statut', 'Reçu envoyé',
   ]
