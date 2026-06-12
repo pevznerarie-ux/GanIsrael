@@ -403,6 +403,64 @@ export async function sendNotificationToAdmin(data, inscriptionId) {
   })
 }
 
+// ── Place disponible — lien inscription reservee ─────────────────────────────
+export async function sendWaitingListAcceptance(entry, inscriptionUrl) {
+  const classesText  = (entry.classes  || []).join(', ') || '—'
+  const semainesText = (entry.semaines || []).map(s => `S${s}`).join(', ') || '—'
+  await sendEmail({
+    from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
+    to: entry.email,
+    subject: "Une place est disponible — Gan Israel Beth Hillel",
+    html: `
+<!DOCTYPE html>
+<html lang="fr">
+<body style="font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;margin:0;padding:20px">
+<div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+  <div style="background:#16a34a;padding:24px 32px;text-align:center">
+    <img src="${LOGO_URL}" alt="Gan Israel Beth Hillel" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);margin-bottom:10px;display:block;margin-left:auto;margin-right:auto" />
+    <h1 style="color:white;margin:0;font-size:20px;font-weight:800">Gan Israel Beth Hillel</h1>
+    <p style="color:#bbf7d0;margin:4px 0 0;font-size:13px">Centre Aere Maternelle — Levallois-Perret</p>
+  </div>
+  <div style="padding:32px">
+    <div style="font-size:40px;text-align:center;margin-bottom:16px">🎉</div>
+    <h2 style="color:#15803d;margin:0 0 8px;text-align:center">Bonne nouvelle — une place est disponible !</h2>
+    <p style="color:#475569;margin:0 0 20px">Bonjour <strong>${entry.prenom} ${entry.nom}</strong>,</p>
+    <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:16px;border-radius:0 8px 8px 0;margin-bottom:24px">
+      <p style="margin:0 0 8px;color:#15803d;font-size:15px;font-weight:700">
+        Une place vient de se liberer au Gan Israel Beth Hillel ete 2026.
+      </p>
+      <p style="margin:0;color:#166534;font-size:14px;line-height:1.6">
+        Classe(s) : <strong>${classesText}</strong><br>
+        Semaine(s) : <strong>${semainesText}</strong>
+      </p>
+    </div>
+    <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin-bottom:28px">
+      <p style="margin:0;font-size:14px;color:#92400e">
+        ⚡ Ce lien est personnel et valable pour vous uniquement. Finalisez votre inscription rapidement — la place sera attribuee a la prochaine personne sur liste si vous ne completez pas dans les 48h.
+      </p>
+    </div>
+    <div style="text-align:center;margin-bottom:28px">
+      <a href="${inscriptionUrl}" style="display:inline-block;background:#16a34a;color:white;text-decoration:none;padding:16px 36px;border-radius:10px;font-size:16px;font-weight:700;letter-spacing:0.01em">
+        Finaliser mon inscription
+      </a>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;text-align:center;margin:0">
+      Ou copiez ce lien dans votre navigateur :<br>
+      <span style="color:#2563eb;word-break:break-all">${inscriptionUrl}</span>
+    </p>
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+    <p style="color:#1e3a8a;font-size:14px;font-weight:700;margin:0 0 4px">La Direction</p>
+    <p style="color:#94a3b8;font-size:12px;margin:0">
+      Gan Israel Beth Hillel · 89 rue Carnot, 92300 Levallois-Perret<br>
+      <a href="mailto:ganisrael@bethmenahem-lis.com" style="color:#2563eb">ganisrael@bethmenahem-lis.com</a>
+    </p>
+  </div>
+</div>
+</body>
+</html>`,
+  })
+}
+
 // ── Confirmation liste d'attente ─────────────────────────────────────────────
 export async function sendWaitingListConfirmation(entry) {
   const classesText = (entry.classes || []).join(', ') || '—'

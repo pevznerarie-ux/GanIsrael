@@ -245,3 +245,42 @@ export function deleteListeAttente(id) {
   const list = loadWait().filter(e => e.id !== Number(id))
   saveWait(list)
 }
+
+export function updateListeAttente(id, data) {
+  const list = loadWait()
+  const item = list.find(e => e.id === Number(id))
+  if (item) Object.assign(item, data)
+  saveWait(list)
+}
+
+// ── Tokens inscription reservee ───────────────────────────────────────────────
+const tokensFile = join(dbDir, 'tokens.json')
+
+function loadTokens() {
+  try { return JSON.parse(readFileSync(tokensFile, 'utf8')) } catch { return [] }
+}
+function saveTokens(data) {
+  writeFileSync(tokensFile, JSON.stringify(data, null, 2), 'utf8')
+}
+
+export function createToken(data) {
+  const tokens = loadTokens()
+  const entry = {
+    token: Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
+    created_at: new Date().toISOString(),
+    prenom:         data.prenom,
+    nom:            data.nom,
+    email:          data.email,
+    telephone:      data.telephone || '',
+    classes:        data.classes   || [],
+    semaines:       data.semaines  || [],
+    listeAttenteId: data.listeAttenteId,
+  }
+  tokens.push(entry)
+  saveTokens(tokens)
+  return entry
+}
+
+export function getTokenData(token) {
+  return loadTokens().find(t => t.token === token) || null
+}

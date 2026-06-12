@@ -2142,8 +2142,10 @@ function TabWhatsapp({ inscriptions, user, password }) {
 
 // ── Onglet Liste d'attente ────────────────────────────────────────────────────
 function TabListeAttente({ user, password }) {
-  const [list, setList]     = useState([])
-  const [loading, setLoading] = useState(true)
+  const [list, setList]         = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [accepting, setAccepting] = useState({})
+  const [accepted, setAccepted]   = useState({})
 
   useEffect(() => {
     fetch('/api/admin/liste-attente', { headers: { 'x-admin-user': user, 'x-admin-password': password } })
@@ -2159,6 +2161,24 @@ function TabListeAttente({ user, password }) {
       headers: { 'x-admin-user': user, 'x-admin-password': password },
     })
     setList(prev => prev.filter(e => e.id !== id))
+  }
+
+  const accept = async (id) => {
+    if (!confirm('Envoyer le lien d\'inscription à cette personne ?')) return
+    setAccepting(p => ({ ...p, [id]: true }))
+    try {
+      const res = await fetch(`/api/admin/liste-attente/${id}/accept`, {
+        method: 'POST',
+        headers: { 'x-admin-user': user, 'x-admin-password': password },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setAccepted(p => ({ ...p, [id]: data.url }))
+      setList(prev => prev.map(e => e.id === id ? { ...e, accepted_at: new Date().toISOString() } : e))
+    } catch (err) {
+      alert('Erreur : ' + err.message)
+    }
+    setAccepting(p => ({ ...p, [id]: false }))
   }
 
   const SEMAINE_LABELS = { 1: 'S1 — 6–10 juil.', 2: 'S2 — 13–17 juil.', 3: 'S3 — 20–24 juil.' }
@@ -2222,9 +2242,28 @@ function TabListeAttente({ user, password }) {
                       : <span style={{ color: '#cbd5e1' }}>—</span>}
                   </td>
                   <td>
-                    <button onClick={() => remove(e.id)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}>
-                      Supprimer
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {accepted[e.id] ? (
+                        <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>
+                          ✅ Lien envoyé
+                        </span>
+                      ) : e.accepted_at ? (
+                        <span style={{ background: '#fef9c3', color: '#92400e', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>
+                          📨 Déjà invité
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => accept(e.id)}
+                          disabled={accepting[e.id]}
+                          style={{ background: '#16a34a', color: 'white', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                        >
+                          {accepting[e.id] ? '…' : '✉️ Accepter'}
+                        </button>
+                      )}
+                      <button onClick={() => remove(e.id)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}>
+                        Supprimer
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

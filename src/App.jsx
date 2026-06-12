@@ -4,15 +4,18 @@ import Header from './components/Header'
 import Hero from './components/Hero'
 import PricingGrid from './components/PricingGrid'
 import WaitingListForm from './components/WaitingListForm'
+import InscriptionReservee from './components/InscriptionReservee'
 import Programme from './components/Programme'
 import Footer from './components/Footer'
 import Admin from './components/Admin'
 import ThankYou from './components/ThankYou'
 
-const isAdmin = window.location.pathname === '/admin'
+const isAdmin       = window.location.pathname === '/admin'
+const isReservation = window.location.pathname === '/inscription'
 
 export default function App() {
-  if (isAdmin) return <Admin />
+  if (isAdmin)       return <Admin />
+  if (isReservation) return <InscriptionReservee />
 
   const params = new URLSearchParams(window.location.search)
   const showThankYou = params.get('merci') === '1'

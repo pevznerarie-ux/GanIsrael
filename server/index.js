@@ -3,8 +3,8 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, markReceiptSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit, getAllListeAttente, insertListeAttente, deleteListeAttente } from './db.js'
-import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent, sendReminderToParent, sendPaymentRetryEmail, sendWaitingListConfirmation } from './email.js'
+import { insertInscription, getInscription, markEmailSent, markReceiptSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit, getAllListeAttente, insertListeAttente, deleteListeAttente, updateListeAttente, createToken, getTokenData } from './db.js'
+import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent, sendReminderToParent, sendPaymentRetryEmail, sendWaitingListConfirmation, sendWaitingListAcceptance } from './email.js'
 import { generateReceiptPDF } from './receipt.js'
 
 const app = express()
@@ -657,6 +657,32 @@ app.delete('/api/admin/liste-attente/:id', (req, res) => {
   if (!authAdmin(req, res)) return
   deleteListeAttente(req.params.id)
   res.json({ ok: true })
+})
+
+app.post('/api/admin/liste-attente/:id/accept', async (req, res) => {
+  if (!authAdmin(req, res)) return
+  const all = getAllListeAttente()
+  const entry = all.find(e => e.id === Number(req.params.id))
+  if (!entry) return res.status(404).json({ error: 'Entree introuvable' })
+
+  const token = createToken({ ...entry, listeAttenteId: entry.id })
+  const base = process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'
+  const inscriptionUrl = `${base}/inscription?token=${token.token}`
+
+  try {
+    await sendWaitingListAcceptance(entry, inscriptionUrl)
+    updateListeAttente(entry.id, { accepted_at: new Date().toISOString(), inscription_url: inscriptionUrl })
+    res.json({ ok: true, url: inscriptionUrl })
+  } catch (err) {
+    console.error('[accept]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/inscription-token/:token', (req, res) => {
+  const data = getTokenData(req.params.token)
+  if (!data) return res.status(404).json({ error: 'Lien invalide ou expire' })
+  res.json(data)
 })
 
 // Servir le build React en production
