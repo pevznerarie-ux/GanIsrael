@@ -87,6 +87,35 @@ function authAdmin(req, res) {
   return true
 }
 
+// ── Diagnostic connectivité HelloAsso ────────────────────────────────────────
+app.get('/api/diag/helloasso', async (req, res) => {
+  const results = {}
+  // Test DNS + TCP vers HelloAsso
+  try {
+    const r = await fetch('https://api.helloasso.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: 'test', client_secret: 'test' }),
+      signal: AbortSignal.timeout(8000),
+    })
+    results.network = 'ok'
+    results.http_status = r.status
+    results.http_body = await r.text()
+  } catch (err) {
+    results.network = 'FAILED'
+    results.error = err.message
+    results.cause_code = err.cause?.code || null
+    results.cause_msg  = err.cause?.message || null
+  }
+  results.env = {
+    has_client_id:     !!process.env.HELLOASSO_CLIENT_ID,
+    has_client_secret: !!process.env.HELLOASSO_CLIENT_SECRET,
+    org_slug:          process.env.HELLOASSO_ORG_SLUG || '(manquant)',
+    test_mode:         process.env.TEST_MODE || 'false',
+  }
+  res.json(results)
+})
+
 app.post('/api/admin/login', (req, res) => {
   const { user, password } = req.body
   const role = getRole(user, password)
