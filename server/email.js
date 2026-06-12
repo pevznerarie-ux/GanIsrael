@@ -345,7 +345,7 @@ export async function sendWaitingListConfirmation(entry) {
   await sendEmail({
     from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: entry.email,
-    subject: '✅ Liste d'attente — Gan Israel Beth Hillel',
+    subject: "✅ Liste d'attente — Gan Israel Beth Hillel",
     html: `
 <!DOCTYPE html>
 <html lang="fr">
