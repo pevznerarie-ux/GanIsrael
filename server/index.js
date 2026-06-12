@@ -496,6 +496,15 @@ app.patch('/api/admin/inscriptions/:id/statut', (req, res) => {
   const { statut } = req.body
   const VALID = ['en_attente', 'accompte_paye', 'solde_paye', 'annule', 'archive', 'attente_validation']
   if (!VALID.includes(statut)) return res.status(400).json({ error: 'Statut invalide' })
+
+  if (statut === 'solde_paye') {
+    const inscription = getInscription(req.params.id)
+    if (inscription) {
+      updateInscription(req.params.id, { statut, accompte: Number(inscription.total) })
+      return res.json({ ok: true })
+    }
+  }
+
   updateStatut(req.params.id, statut)
   res.json({ ok: true })
 })
