@@ -3,8 +3,8 @@ import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import 'dotenv/config'
-import { insertInscription, getInscription, markEmailSent, markReceiptSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit, getAllListeAttente, insertListeAttente, deleteListeAttente } from './db.js'
-import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent, sendReminderToParent, sendPaymentRetryEmail, sendWaitingListConfirmation } from './email.js'
+import { insertInscription, getInscription, markEmailSent, markReceiptSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit } from './db.js'
+import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent, sendReminderToParent, sendPaymentRetryEmail } from './email.js'
 import { generateReceiptPDF } from './receipt.js'
 
 const app = express()
@@ -633,30 +633,6 @@ app.post('/api/admin/relance-email', async (req, res) => {
   }
 
   res.json({ ok: true, sent, errors, total: avecSolde.length })
-})
-
-// ── Liste d'attente ───────────────────────────────────────────────────────────
-app.post('/api/liste-attente', async (req, res) => {
-  const { prenom, nom, email, telephone, classes, semaines } = req.body
-  if (!prenom || !nom || !email) return res.status(400).json({ error: 'Prénom, nom et email requis' })
-  try {
-    const entry = insertListeAttente({ prenom, nom, email, telephone, classes, semaines })
-    try { await sendWaitingListConfirmation(entry) } catch (e) { console.error('[WL email]', e.message) }
-    res.json({ ok: true })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
-
-app.get('/api/admin/liste-attente', (req, res) => {
-  if (!authAdmin(req, res)) return
-  res.json(getAllListeAttente())
-})
-
-app.delete('/api/admin/liste-attente/:id', (req, res) => {
-  if (!authAdmin(req, res)) return
-  deleteListeAttente(req.params.id)
-  res.json({ ok: true })
 })
 
 // Servir le build React en production

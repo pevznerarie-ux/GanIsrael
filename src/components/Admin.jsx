@@ -2140,76 +2140,6 @@ function TabWhatsapp({ inscriptions, user, password }) {
   )
 }
 
-// ── Onglet Liste d'attente ────────────────────────────────────────────────────
-function TabListeAttente({ entries, user, password, onDelete }) {
-  const [deleting, setDeleting] = useState({})
-
-  const handleDelete = async (id) => {
-    setDeleting(d => ({ ...d, [id]: true }))
-    await fetch(`/api/admin/liste-attente/${id}`, {
-      method: 'DELETE',
-      headers: { 'x-admin-user': user, 'x-admin-password': password },
-    })
-    onDelete(id)
-    setDeleting(d => ({ ...d, [id]: false }))
-  }
-
-  if (entries.length === 0) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 15 }}>
-        Aucune personne en liste d'attente pour l'instant.
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ padding: '24px 20px' }}>
-      <div style={{ marginBottom: 16, color: '#475569', fontSize: 14 }}>
-        {entries.length} personne{entries.length > 1 ? 's' : ''} en liste d'attente
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {entries.map(e => (
-          <div key={e.id} style={{
-            background: 'white', border: '1px solid #e2e8f0', borderRadius: 10,
-            padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16,
-            boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-          }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, color: '#1e3a8a', fontSize: 15 }}>
-                {e.prenom} {e.nom}
-              </div>
-              <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                <a href={`mailto:${e.email}`} style={{ color: '#2563eb' }}>{e.email}</a>
-                {e.telephone && <span> · {e.telephone}</span>}
-              </div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-                {e.classes?.length > 0 && <span>Classes : {e.classes.join(', ')} · </span>}
-                {e.semaines?.length > 0 && <span>Semaines : {e.semaines.map(s => `S${s}`).join(', ')} · </span>}
-                <span>{new Date(e.created_at).toLocaleDateString('fr-FR')}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-              {e.telephone && (
-                <a
-                  href={`https://wa.me/${e.telephone.replace(/\D/g,'').replace(/^0/, '33')}?text=${encodeURIComponent(`Bonjour ${e.prenom},\n\nUne place s'est libérée au Gan Israel Beth Hillel été 2026. Souhaitez-vous vous inscrire ?\n\nCordialement,\nLa Direction`)}`}
-                  target="_blank" rel="noreferrer"
-                  style={{ background: '#dcfce7', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 7, padding: '6px 12px', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
-                >💬 WhatsApp</a>
-              )}
-              <a href={`mailto:${e.email}?subject=Place disponible — Gan Israel Beth Hillel&body=Bonjour ${e.prenom},%0A%0AUne place s'est libérée au Gan Israel Beth Hillel été 2026. Souhaitez-vous vous inscrire ?%0A%0ACordialement,%0ALa Direction`}
-                style={{ background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 7, padding: '6px 12px', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
-              >✉️ Email</a>
-              <button onClick={() => handleDelete(e.id)} disabled={deleting[e.id]}
-                style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 7, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-              >{deleting[e.id] ? '…' : '🗑'}</button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ── Composant principal Admin ─────────────────────────────────────────────────
 export default function Admin() {
   const saved = localStorage.getItem('admin_user')
@@ -2223,8 +2153,7 @@ export default function Admin() {
   const [showPwd, setShowPwd]   = useState(false)
   const [remember, setRemember] = useState(saved?.remember ?? true)
   const [role, setRole]         = useState(null)
-  const [inscriptions, setInscriptions]     = useState([])
-  const [listeAttente, setListeAttente]     = useState([])
+  const [inscriptions, setInscriptions] = useState([])
   const [loading, setLoading]   = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshDone, setRefreshDone] = useState(false)
@@ -2252,21 +2181,10 @@ export default function Admin() {
     setTimeout(() => setRefreshDone(false), 2000)
   }
 
-  const fetchListeAttente = async (u, pwd) => {
-    try {
-      const res = await fetch('/api/admin/liste-attente', {
-        headers: { 'x-admin-user': u, 'x-admin-password': pwd },
-      })
-      if (!res.ok) return
-      setListeAttente(await res.json())
-    } catch {}
-  }
-
   // Re-fetch à chaque changement d'onglet
   const goToTab = (t) => {
     setTab(t)
     fetchInscriptions(user, password)
-    if (t === 'attente') fetchListeAttente(user, password)
   }
 
   // Auto-login si identifiants sauvegardés
@@ -2383,13 +2301,12 @@ export default function Admin() {
   }
 
   const ALL_TABS = [
-    { id: 'dashboard',    label: '📊 Dashboard',                         roles: ['admin'] },
-    { id: 'familles',     label: `👨‍👩‍👧 Familles (${inscriptions.length})`, roles: ['admin'] },
-    { id: 'classes',      label: '🏫 Par classe',                        roles: ['admin', 'animatrice'] },
-    { id: 'whatsapp',     label: '💬 WhatsApp & Soldes',                  roles: ['admin'] },
-    { id: 'attente',      label: `⏳ Liste d'attente (${listeAttente.length})`, roles: ['admin'] },
-    { id: 'analytics',   label: '📈 Trafic site',                        roles: ['admin'] },
-    { id: 'visiteurs',    label: '👥 Contacts',                           roles: ['admin'] },
+    { id: 'dashboard', label: '📊 Dashboard',                         roles: ['admin'] },
+    { id: 'familles',  label: `👨‍👩‍👧 Familles (${inscriptions.length})`, roles: ['admin'] },
+    { id: 'classes',   label: '🏫 Par classe',                        roles: ['admin', 'animatrice'] },
+    { id: 'whatsapp',  label: '💬 WhatsApp & Soldes',                  roles: ['admin'] },
+    { id: 'analytics', label: '📈 Trafic site',                        roles: ['admin'] },
+    { id: 'visiteurs', label: '👥 Contacts',                           roles: ['admin'] },
   ]
   const TABS = ALL_TABS.filter(t => t.roles.includes(role))
 
@@ -2434,7 +2351,6 @@ export default function Admin() {
         {tab === 'classes'   && <TabClasses inscriptions={inscriptions} />}
         {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} user={user} password={password} />}
         {tab === 'analytics' && role === 'admin' && <TabAnalytics user={user} password={password} />}
-        {tab === 'attente'   && role === 'admin' && <TabListeAttente entries={listeAttente} user={user} password={password} onDelete={(id) => { setListeAttente(l => l.filter(e => e.id !== id)) }} />}
         {tab === 'visiteurs' && role === 'admin' && <TabVisiteurs user={user} password={password} />}
       </div>
     </div>
