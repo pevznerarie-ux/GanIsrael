@@ -215,8 +215,19 @@ app.post('/api/create-checkout', async (req, res) => {
       if (!response.ok) {
         return res.status(502).json({ error: 'HelloAsso error', status: response.status, body: rawText })
       }
-      const data = JSON.parse(rawText)
+      if (!rawText || rawText.trim() === '') {
+        console.error('[HelloAsso] Réponse vide (corps vide) — impossible de parser le JSON')
+        return res.status(502).json({ error: 'HelloAsso returned an empty response body' })
+      }
+      let data
+      try {
+        data = JSON.parse(rawText)
+      } catch (parseErr) {
+        console.error(`[HelloAsso] Échec du parsing JSON: ${parseErr.message} — corps reçu: ${rawText}`)
+        return res.status(502).json({ error: 'HelloAsso returned invalid JSON', parseError: parseErr.message, body: rawText })
+      }
       if (!data.redirectUrl) {
+        console.error(`[HelloAsso] redirectUrl manquant dans la réponse: ${JSON.stringify(data)}`)
         return res.status(502).json({ error: 'HelloAsso no redirectUrl', details: data })
       }
       redirectUrl = data.redirectUrl
@@ -473,8 +484,19 @@ app.post('/api/admin/inscriptions/:id/relance-paiement', async (req, res) => {
       if (!response.ok) {
         return res.status(502).json({ error: 'HelloAsso error', status: response.status, body: rawText })
       }
-      const data = JSON.parse(rawText)
+      if (!rawText || rawText.trim() === '') {
+        console.error('[Relance HelloAsso] Réponse vide (corps vide) — impossible de parser le JSON')
+        return res.status(502).json({ error: 'HelloAsso returned an empty response body' })
+      }
+      let data
+      try {
+        data = JSON.parse(rawText)
+      } catch (parseErr) {
+        console.error(`[Relance HelloAsso] Échec du parsing JSON: ${parseErr.message} — corps reçu: ${rawText}`)
+        return res.status(502).json({ error: 'HelloAsso returned invalid JSON', parseError: parseErr.message, body: rawText })
+      }
       if (!data.redirectUrl) {
+        console.error(`[Relance HelloAsso] redirectUrl manquant dans la réponse: ${JSON.stringify(data)}`)
         return res.status(502).json({ error: 'HelloAsso no redirectUrl', details: data })
       }
       checkoutUrl = data.redirectUrl
