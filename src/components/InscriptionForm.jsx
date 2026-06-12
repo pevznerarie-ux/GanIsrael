@@ -37,6 +37,7 @@ export default function InscriptionForm({ paiementMode }) {
   const [form, setForm] = useState({ ...INIT, modePaiement: modeAutre ? 'autre' : '' })
   const [status, setStatus] = useState('idle')
   const [helloassoUrl, setHelloassoUrl] = useState(null)
+  const [haTestMode, setHaTestMode] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [dispos, setDispos] = useState(null)
 
@@ -221,11 +222,21 @@ export default function InscriptionForm({ paiementMode }) {
         fetch('/api/disponibilites').then(r => r.json()).then(setDispos).catch(() => {})
         throw new Error(`La classe ${classe} est complète. Veuillez sélectionner une autre classe.`)
       }
-      if (!haRes.ok) throw new Error('Erreur HelloAsso')
-      const { url } = await haRes.json()
+      if (!haRes.ok) {
+        let errMsg = 'Erreur HelloAsso'
+        try {
+          const errData = await haRes.json()
+          if (errData.error) errMsg = errData.error
+          if (errData.body) console.error('[HelloAsso detail]', errData.body)
+        } catch {}
+        throw new Error(errMsg)
+      }
+      const { url, testMode } = await haRes.json()
+      if (!url) throw new Error('Lien HelloAsso introuvable — contactez-nous.')
 
       // 3. Afficher le modal avant la redirection vers HelloAsso
       setHelloassoUrl(url)
+      setHaTestMode(!!testMode)
       setShowModal(true)
       setStatus('idle')
 
@@ -240,6 +251,11 @@ export default function InscriptionForm({ paiementMode }) {
     {showModal && (
       <div className="ha-modal-overlay" role="dialog" aria-modal="true">
         <div className="ha-modal">
+          {haTestMode && (
+            <div style={{ background: '#fef3c7', border: '1.5px solid #f59e0b', borderRadius: 8, padding: '8px 14px', marginBottom: 16, fontSize: '0.85rem', color: '#92400e', fontWeight: 700 }}>
+              ⚠️ MODE TEST — Aucun vrai paiement. Désactiver TEST_MODE sur Railway pour activer HelloAsso.
+            </div>
+          )}
           <div className="ha-modal-icon">🔒</div>
           <h2 className="ha-modal-title">Redirection vers HelloAsso</h2>
           <p className="ha-modal-body">

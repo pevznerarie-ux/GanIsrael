@@ -141,8 +141,9 @@ app.post('/api/create-checkout', async (req, res) => {
 
     let redirectUrl
 
-    if (process.env.TEST_MODE === 'true') {
-      console.log('[TEST MODE] Paiement HelloAsso ignoré')
+    const testMode = process.env.TEST_MODE === 'true'
+    if (testMode) {
+      console.log('[TEST MODE] Paiement HelloAsso ignoré — désactiver TEST_MODE en prod !')
       redirectUrl = returnWithId
     } else {
       const token = await getToken()
@@ -181,7 +182,7 @@ app.post('/api/create-checkout', async (req, res) => {
       redirectUrl = data.redirectUrl
     }
 
-    res.json({ url: redirectUrl })
+    res.json({ url: redirectUrl, testMode })
 
   } catch (err) {
     console.error('[checkout]', err.message)
