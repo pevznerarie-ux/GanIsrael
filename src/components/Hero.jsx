@@ -18,7 +18,7 @@ export default function Hero() {
           </div>
 
           <div className="hero-content">
-            <div className="hero-badge">🌟 Inscriptions Été 2026</div>
+            <div className="hero-badge">🔒 Inscriptions fermées — Liste d'attente ouverte</div>
             <h1 className="hero-title">
               <span className="hero-title-line">Un été inoubliable</span>
               <span className="hero-title-brand">Gan Israel !</span>
@@ -28,7 +28,7 @@ export default function Hero() {
               dans une ambiance chaleureuse et bienveillante.
             </p>
             <a href="#inscription" className="hero-cta">
-              📝 S'inscrire maintenant
+              📋 Liste d'attente
             </a>
           </div>
         </div>

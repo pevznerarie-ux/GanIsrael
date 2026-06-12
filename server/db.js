@@ -4,8 +4,9 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const dbDir = join(__dirname, '../db')
-const dbFile = join(dbDir, 'inscriptions.json')
+const dbFile    = join(dbDir, 'inscriptions.json')
 const visitFile = join(dbDir, 'visiteurs.json')
+const waitFile  = join(dbDir, 'liste-attente.json')
 mkdirSync(dbDir, { recursive: true })
 
 function load() {
@@ -208,4 +209,38 @@ export function countByClasseAndSemaine() {
     }
   }
   return counts
+}
+
+// ── Liste d'attente ───────────────────────────────────────────────────────────
+function loadWait() {
+  try { return JSON.parse(readFileSync(waitFile, 'utf8')) } catch { return [] }
+}
+function saveWait(data) {
+  writeFileSync(waitFile, JSON.stringify(data, null, 2), 'utf8')
+}
+
+export function getAllListeAttente() {
+  return loadWait()
+}
+
+export function insertListeAttente(data) {
+  const list = loadWait()
+  const entry = {
+    id: Date.now(),
+    created_at: new Date().toISOString(),
+    prenom:    data.prenom,
+    nom:       data.nom,
+    email:     data.email,
+    telephone: data.telephone || '',
+    classes:   data.classes   || [],
+    semaines:  data.semaines  || [],
+  }
+  list.unshift(entry)
+  saveWait(list)
+  return entry
+}
+
+export function deleteListeAttente(id) {
+  const list = loadWait().filter(e => e.id !== Number(id))
+  saveWait(list)
 }
