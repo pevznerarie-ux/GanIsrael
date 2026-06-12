@@ -46,6 +46,7 @@ async function getToken() {
         client_id: process.env.HELLOASSO_CLIENT_ID,
         client_secret: process.env.HELLOASSO_CLIENT_SECRET,
       }),
+      signal: AbortSignal.timeout(8000),
     })
   } catch (err) {
     const cause = err.cause ? ` — cause: ${err.cause?.code || err.cause?.message || String(err.cause)}` : ''
