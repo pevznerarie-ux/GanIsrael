@@ -3,7 +3,7 @@ import './App.css'
 import Header from './components/Header'
 import Hero from './components/Hero'
 import PricingGrid from './components/PricingGrid'
-import InscriptionForm from './components/InscriptionForm'
+import WaitingListForm from './components/WaitingListForm'
 import Programme from './components/Programme'
 import Footer from './components/Footer'
 import Admin from './components/Admin'
@@ -43,7 +43,7 @@ export default function App() {
         <Hero />
         <PricingGrid />
         <Programme />
-        <InscriptionForm paiementMode={paiementMode} />
+        <WaitingListForm />
       </main>
       <Footer />
     </>

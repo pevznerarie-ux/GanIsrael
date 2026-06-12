@@ -2140,6 +2140,102 @@ function TabWhatsapp({ inscriptions, user, password }) {
   )
 }
 
+// ── Onglet Liste d'attente ────────────────────────────────────────────────────
+function TabListeAttente({ user, password }) {
+  const [list, setList]     = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/admin/liste-attente', { headers: { 'x-admin-user': user, 'x-admin-password': password } })
+      .then(r => r.json())
+      .then(data => { setList(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const remove = async (id) => {
+    if (!confirm('Supprimer cette entrée ?')) return
+    await fetch(`/api/admin/liste-attente/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-user': user, 'x-admin-password': password },
+    })
+    setList(prev => prev.filter(e => e.id !== id))
+  }
+
+  const SEMAINE_LABELS = { 1: 'S1 — 6–10 juil.', 2: 'S2 — 13–17 juil.', 3: 'S3 — 20–24 juil.' }
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Chargement…</div>
+
+  return (
+    <div style={{ padding: '24px 32px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <h2 style={{ margin: 0, color: '#1e3a8a', fontSize: 20 }}>Liste d'attente</h2>
+        <span style={{ background: '#dbeafe', color: '#1e40af', borderRadius: 20, padding: '2px 12px', fontSize: 13, fontWeight: 700 }}>
+          {list.length} personne{list.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {list.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#94a3b8', padding: 60, fontSize: 15 }}>
+          Aucune inscription en liste d'attente
+        </div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Nom</th>
+                <th>Email</th>
+                <th>Téléphone</th>
+                <th>Classes</th>
+                <th>Semaines</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map(e => (
+                <tr key={e.id}>
+                  <td style={{ whiteSpace: 'nowrap', color: '#64748b', fontSize: 13 }}>
+                    {new Date(e.created_at).toLocaleDateString('fr-FR')}
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{e.prenom} {e.nom}</td>
+                  <td>
+                    <a href={`mailto:${e.email}`} style={{ color: '#2563eb' }}>{e.email}</a>
+                  </td>
+                  <td>
+                    {e.telephone
+                      ? <a href={`https://wa.me/${e.telephone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" style={{ color: '#16a34a' }}>{e.telephone}</a>
+                      : <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
+                  <td>
+                    {(e.classes || []).length > 0
+                      ? (e.classes || []).map(c => (
+                          <span key={c} style={{ background: '#ede9fe', color: '#5b21b6', borderRadius: 12, padding: '2px 8px', fontSize: 12, fontWeight: 600, marginRight: 4 }}>{c}</span>
+                        ))
+                      : <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
+                  <td>
+                    {(e.semaines || []).length > 0
+                      ? (e.semaines || []).map(s => (
+                          <span key={s} style={{ background: '#dbeafe', color: '#1e40af', borderRadius: 12, padding: '2px 8px', fontSize: 12, fontWeight: 600, marginRight: 4 }}>{SEMAINE_LABELS[s] || `S${s}`}</span>
+                        ))
+                      : <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
+                  <td>
+                    <button onClick={() => remove(e.id)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}>
+                      Supprimer
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Composant principal Admin ─────────────────────────────────────────────────
 export default function Admin() {
   const saved = localStorage.getItem('admin_user')
@@ -2305,8 +2401,9 @@ export default function Admin() {
     { id: 'familles',  label: `👨‍👩‍👧 Familles (${inscriptions.length})`, roles: ['admin'] },
     { id: 'classes',   label: '🏫 Par classe',                        roles: ['admin', 'animatrice'] },
     { id: 'whatsapp',  label: '💬 WhatsApp & Soldes',                  roles: ['admin'] },
-    { id: 'analytics', label: '📈 Trafic site',                        roles: ['admin'] },
-    { id: 'visiteurs', label: '👥 Contacts',                           roles: ['admin'] },
+    { id: 'analytics',      label: '📈 Trafic site',      roles: ['admin'] },
+    { id: 'visiteurs',      label: '👥 Contacts',         roles: ['admin'] },
+    { id: 'liste-attente',  label: '⏳ Liste d\'attente', roles: ['admin'] },
   ]
   const TABS = ALL_TABS.filter(t => t.roles.includes(role))
 
@@ -2350,8 +2447,9 @@ export default function Admin() {
         />}
         {tab === 'classes'   && <TabClasses inscriptions={inscriptions} />}
         {tab === 'whatsapp'  && role === 'admin' && <TabWhatsapp inscriptions={inscriptions} user={user} password={password} />}
-        {tab === 'analytics' && role === 'admin' && <TabAnalytics user={user} password={password} />}
-        {tab === 'visiteurs' && role === 'admin' && <TabVisiteurs user={user} password={password} />}
+        {tab === 'analytics'     && role === 'admin' && <TabAnalytics user={user} password={password} />}
+        {tab === 'visiteurs'     && role === 'admin' && <TabVisiteurs user={user} password={password} />}
+        {tab === 'liste-attente' && role === 'admin' && <TabListeAttente user={user} password={password} />}
       </div>
     </div>
   )
