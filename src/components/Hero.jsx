@@ -18,7 +18,7 @@ export default function Hero() {
           </div>
 
           <div className="hero-content">
-            <div className="hero-badge">🌟 Inscriptions Été 2026</div>
+            <div className="hero-badge">🌟 Été 2026</div>
             <h1 className="hero-title">
               <span className="hero-title-line">Un été inoubliable</span>
               <span className="hero-title-brand">Gan Israel !</span>
@@ -27,8 +27,25 @@ export default function Hero() {
               Centre Aéré Maternelle — activités, jeux et valeurs juives<br />
               dans une ambiance chaleureuse et bienveillante.
             </p>
+
+            <div style={{
+              background: 'rgba(255,255,255,0.12)',
+              border: '1.5px solid rgba(255,255,255,0.3)',
+              borderRadius: 14,
+              padding: '16px 20px',
+              marginBottom: 16,
+              backdropFilter: 'blur(8px)',
+            }}>
+              <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 16, color: 'white' }}>
+                🔒 Les inscriptions pour l'été 2026 sont fermées.
+              </p>
+              <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
+                Toutes les places sont pourvues. Vous pouvez vous inscrire sur la liste d'attente — nous vous contacterons en priorité si une place se libère.
+              </p>
+            </div>
+
             <a href="#inscription" className="hero-cta">
-              📝 S'inscrire maintenant
+              📋 Rejoindre la liste d'attente
             </a>
           </div>
         </div>
