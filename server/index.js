@@ -33,19 +33,29 @@ const CAPACITES = {
 }
 
 async function getToken() {
-  const res = await fetch(`${HA_BASE}/oauth2/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: process.env.HELLOASSO_CLIENT_ID,
-      client_secret: process.env.HELLOASSO_CLIENT_SECRET,
-    }),
-  })
+  if (!process.env.HELLOASSO_CLIENT_ID || !process.env.HELLOASSO_CLIENT_SECRET) {
+    throw new Error('HelloAsso credentials manquants (HELLOASSO_CLIENT_ID / HELLOASSO_CLIENT_SECRET)')
+  }
+  let res
+  try {
+    res = await fetch(`${HA_BASE}/oauth2/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: process.env.HELLOASSO_CLIENT_ID,
+        client_secret: process.env.HELLOASSO_CLIENT_SECRET,
+      }),
+    })
+  } catch (err) {
+    const cause = err.cause ? ` — cause: ${err.cause?.code || err.cause?.message || String(err.cause)}` : ''
+    console.error(`[HelloAsso auth] fetch failed${cause}`)
+    throw new Error(`HelloAsso injoignable${cause}`)
+  }
   if (!res.ok) {
     const body = await res.text()
     console.error(`[HelloAsso auth] HTTP ${res.status}: ${body}`)
-    throw new Error(`HelloAsso auth failed`)
+    throw new Error(`HelloAsso auth failed (HTTP ${res.status})`)
   }
   const { access_token } = await res.json()
   return access_token
@@ -185,8 +195,9 @@ app.post('/api/create-checkout', async (req, res) => {
     res.json({ url: redirectUrl, testMode })
 
   } catch (err) {
-    console.error('[checkout]', err.message)
-    res.status(500).json({ error: err.message })
+    const cause = err.cause ? ` — cause: ${err.cause?.code || err.cause?.message || String(err.cause)}` : ''
+    console.error('[checkout]', err.message + cause)
+    res.status(500).json({ error: err.message, cause: err.cause?.code || err.cause?.message || null })
   }
 })
 
@@ -443,8 +454,9 @@ app.post('/api/admin/inscriptions/:id/relance-paiement', async (req, res) => {
     console.log(`[Relance paiement] ✓ #${inscription.id} → ${inscription.email} (${amount}€)`)
     res.json({ ok: true })
   } catch (err) {
-    console.error('[Relance paiement] ✗', err.message)
-    res.status(500).json({ error: err.message })
+    const cause = err.cause ? ` — cause: ${err.cause?.code || err.cause?.message || String(err.cause)}` : ''
+    console.error('[Relance paiement] ✗', err.message + cause)
+    res.status(500).json({ error: err.message + cause })
   }
 })
 
