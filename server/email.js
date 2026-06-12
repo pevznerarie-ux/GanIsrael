@@ -1,7 +1,20 @@
 import { Resend } from 'resend'
 import 'dotenv/config'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let resend = null
+if (process.env.RESEND_API_KEY) {
+  resend = new Resend(process.env.RESEND_API_KEY)
+} else {
+  console.error('[Email] ⚠️  RESEND_API_KEY manquant — les emails ne seront PAS envoyés')
+}
+
+async function sendEmail(options) {
+  if (!resend) {
+    console.error('[Email] Resend non initialisé — email à', options.to, 'non envoyé (RESEND_API_KEY manquant)')
+    return
+  }
+  await resend.emails.send(options)
+}
 const LOGO_URL = `${process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'}/logo-gan-israel.png`
 
 const SEMAINE_LABELS = { 1: '6–10 juillet', 2: '13–17 juillet', 3: '20–24 juillet' }
@@ -31,7 +44,7 @@ export async function sendConfirmationToParent(data) {
 
   const modePaiementLabel = { especes_cheque: 'Espèces / Chèque', cb: 'Carte bancaire' }[modePaiement] || modePaiement
 
-  await resend.emails.send({
+  await sendEmail({
     from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: email,
     subject: "Confirmation d'inscription — Gan Israel Beth Hillel",
@@ -116,7 +129,7 @@ export async function sendReceiptToParent(data, inscriptionId, pdfBuffer) {
   const { email, parent1Prenom, parent1Nom, enfants } = data
   const enfantsNoms = enfants.map(e => `${e.prenom} ${e.nom}`).join(' et ')
 
-  await resend.emails.send({
+  await sendEmail({
     from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: email,
     subject: `Votre reçu d'inscription — Gan Israel Beth Hillel`,
@@ -183,7 +196,7 @@ export async function sendReminderToParent(insc) {
     </tr>`
   }).join('')
 
-  await resend.emails.send({
+  await sendEmail({
     from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: email,
     subject: `⚠️ Rappel règlement — Solde de ${solde} € à régler — Gan Israel Beth Hillel`,
@@ -269,7 +282,7 @@ export async function sendPaymentRetryEmail(insc, checkoutUrl) {
   const montant = soldeRestant > 0 ? soldeRestant : Number(insc.total)
   const isFullCB = insc.mode_paiement === 'cb'
 
-  await resend.emails.send({
+  await sendEmail({
     from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: email,
     subject: `⚠️ Inscription Gan Israel — votre paiement n'a pas abouti`,
@@ -342,7 +355,7 @@ export async function sendNotificationToAdmin(data, inscriptionId) {
       </td>
     </tr>`).join('')
 
-  await resend.emails.send({
+  await sendEmail({
     from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: 'ganisrael@bethmenahem-lis.com',
     subject: `📋 Nouvelle inscription #${inscriptionId} — ${parent1Prenom} ${parent1Nom}`,
