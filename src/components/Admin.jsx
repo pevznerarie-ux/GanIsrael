@@ -1939,6 +1939,9 @@ function TabWhatsapp({ inscriptions, user, password }) {
   const [relancing, setRelancing] = useState(false)
   const [relanceResult, setRelanceResult] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [testEmail, setTestEmail] = useState('pevznerarie@gmail.com')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState(null)
 
   const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
 
@@ -1954,6 +1957,21 @@ function TabWhatsapp({ inscriptions, user, password }) {
       setRelanceResult({ ok: false, error: 'Erreur réseau' })
     } finally {
       setRelancing(false)
+    }
+  }
+
+  const handleTestEmail = async () => {
+    if (!testEmail.trim()) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/admin/relance-email/test', { method: 'POST', headers, body: JSON.stringify({ email: testEmail.trim() }) })
+      const data = await res.json()
+      setTestResult(res.ok ? { ok: true } : { ok: false, error: data.error })
+    } catch {
+      setTestResult({ ok: false, error: 'Erreur réseau' })
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -2051,6 +2069,30 @@ function TabWhatsapp({ inscriptions, user, password }) {
                 </div>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Barre de test — envoie un seul email d'exemple */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', padding: '0.75rem 0.9rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: '1rem' }}>
+          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>🧪 Tester l'email de relance :</span>
+          <input
+            type="email"
+            value={testEmail}
+            onChange={e => setTestEmail(e.target.value)}
+            placeholder="votre@email.fr"
+            style={{ flex: '1 1 200px', minWidth: 160, border: '1.5px solid #e2e8f0', borderRadius: 6, padding: '0.4rem 0.6rem', fontSize: '0.85rem', fontFamily: 'inherit' }}
+          />
+          <button
+            onClick={handleTestEmail}
+            disabled={testing}
+            style={{ padding: '0.4rem 1rem', background: testing ? '#cbd5e1' : '#1d4ed8', color: 'white', border: 'none', borderRadius: 6, fontFamily: 'inherit', fontWeight: 700, cursor: testing ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
+          >
+            {testing ? '⏳ Envoi…' : '📨 Envoyer un test'}
+          </button>
+          {testResult && (
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: testResult.ok ? '#15803d' : '#dc2626' }}>
+              {testResult.ok ? '✅ Test envoyé' : `❌ ${testResult.error || 'Erreur'}`}
+            </span>
           )}
         </div>
 

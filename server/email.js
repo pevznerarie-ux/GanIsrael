@@ -176,7 +176,7 @@ export async function sendReceiptToParent(data, inscriptionId, pdfBuffer) {
 }
 
 // ── Relance de solde aux parents ─────────────────────────────────────────────
-export async function sendReminderToParent(insc) {
+export async function sendReminderToParent(insc, checkoutUrl) {
   const email   = insc.email
   const prenom  = insc.parent1_prenom
   const nom     = insc.parent1_nom
@@ -217,13 +217,25 @@ export async function sendReminderToParent(insc) {
 
     <div style="background:#fff7ed;border-left:4px solid #f97316;padding:16px;border-radius:0 8px 8px 0;margin-bottom:24px">
       <p style="margin:0 0 8px;color:#9a3412;font-size:16px;font-weight:700">
-        Un solde de <strong>${solde} €</strong> reste à régler pour l'inscription de <strong>${enfantsNoms}</strong>.
+        Nous sommes aujourd'hui le <strong>15 juin</strong>, date limite de règlement, et nous n'avons toujours pas reçu le solde de <strong>${solde} €</strong> pour l'inscription de <strong>${enfantsNoms}</strong>.
       </p>
-      <p style="margin:0;color:#9a3412;font-size:14px">
-        Merci de remettre ce règlement en espèces ou par chèque à l'ordre de <strong>Beth Menahem Lis</strong>
-        à <strong>Mora Elodie</strong> avant le <strong>15 juin</strong> au plus tard.
+      <p style="margin:0 0 8px;color:#9a3412;font-size:14px">
+        ${checkoutUrl
+          ? `Le plus simple : réglez en ligne par carte bancaire en un clic via le bouton ci-dessous. Vous pouvez aussi régler en espèces ou par chèque à l'ordre de <strong>Beth Menahem Lis</strong> remis à <strong>Mora Elodie</strong>.`
+          : `Merci de remettre ce règlement en espèces ou par chèque à l'ordre de <strong>Beth Menahem Lis</strong> à <strong>Mora Elodie</strong> dès aujourd'hui.`}
+      </p>
+      <p style="margin:0;color:#991b1b;font-size:14px;font-weight:700">
+        ⚠️ Sans règlement de votre part, la place sera attribuée à une famille de la liste d'attente.
       </p>
     </div>
+
+    ${checkoutUrl ? `
+    <div style="text-align:center;margin:0 0 28px">
+      <a href="${checkoutUrl}" style="display:inline-block;background:#16a34a;color:white;text-decoration:none;padding:16px 40px;border-radius:10px;font-size:17px;font-weight:800;letter-spacing:0.02em">
+        💳 Payer ${solde} € en ligne
+      </a>
+      <div style="margin-top:10px;font-size:12px;color:#94a3b8">Paiement sécurisé par carte bancaire via HelloAsso</div>
+    </div>` : ''}
 
     <h3 style="color:#1e3a8a;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 10px">Récapitulatif de l'inscription</h3>
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:20px">
@@ -254,7 +266,9 @@ export async function sendReminderToParent(insc) {
 
     <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:24px">
       <p style="margin:0;font-size:14px;color:#991b1b">
-        📅 <strong>Date limite : 15 juin</strong> — Règlement en espèces ou par chèque à l'ordre de <strong>Beth Menahem Lis</strong>, à remettre à Mora Elodie.
+        📅 <strong>Date limite : 15 juin (aujourd'hui)</strong>${checkoutUrl
+          ? ` — le plus rapide est de régler en ligne via le bouton vert ci-dessus.`
+          : ` — Règlement en espèces ou par chèque à l'ordre de <strong>Beth Menahem Lis</strong>, à remettre à Mora Elodie.`}
       </p>
     </div>
 

@@ -424,64 +424,62 @@ app.post('/api/admin/inscriptions/:id/send-receipt', async (req, res) => {
 })
 
 // ── Admin — relance paiement non abouti ──────────────────────────────────────
+// Génère un lien de paiement HelloAsso pour le solde restant d'une inscription.
+// `token` optionnel : à fournir pour réutiliser le même token sur une série d'appels (relance générale).
+async function createSoldeCheckoutUrl(inscription, token) {
+  const base = process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'
+  // Montant à payer : solde restant (total - accompte) si un acompte a déjà été versé,
+  // sinon paiement complet (total)
+  const soldeRestant = Number(inscription.total) - Number(inscription.accompte)
+  const amount = soldeRestant > 0 ? soldeRestant : Number(inscription.total)
+  const returnUrl = `${base}?merci=1&id=${inscription.id}`
+
+  if (process.env.TEST_MODE === 'true') {
+    console.log('[TEST MODE] Relance paiement — HelloAsso ignoré')
+    return returnUrl
+  }
+
+  const slug = process.env.HELLOASSO_ORG_SLUG
+  const itemName = `Gan Israel — Inscription #${inscription.id}`
+  console.log(`[Relance HelloAsso] slug="${slug}" amount=${Math.round(amount * 100)} return=${returnUrl}`)
+
+  const response = await fetch(
+    `${HA_BASE}/v5/organizations/${slug}/checkout-intents`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token || await getToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        totalAmount:      Math.round(amount * 100),
+        initialAmount:    Math.round(amount * 100),
+        itemName,
+        backUrl:          base,
+        errorUrl:         base,
+        returnUrl,
+        containsDonation: false,
+      }),
+    }
+  )
+
+  const rawText = await response.text()
+  console.log(`[Relance HelloAsso] HTTP ${response.status}: ${rawText}`)
+  if (!response.ok) throw new Error(`HelloAsso error (HTTP ${response.status}): ${rawText}`)
+  const data = JSON.parse(rawText)
+  if (!data.redirectUrl) throw new Error(`HelloAsso: pas de redirectUrl reçu — ${rawText}`)
+  return data.redirectUrl
+}
+
 app.post('/api/admin/inscriptions/:id/relance-paiement', async (req, res) => {
   if (!authAdmin(req, res)) return
   const inscription = getInscription(req.params.id)
   if (!inscription) return res.status(404).json({ error: 'Inscription introuvable' })
 
   try {
-    const base = process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'
-    // Montant à payer : accompte si déjà versé un acompte (solde restant = total - accompte),
-    // sinon paiement complet (total)
-    const soldeRestant = Number(inscription.total) - Number(inscription.accompte)
-    const amount = soldeRestant > 0 ? soldeRestant : Number(inscription.total)
-    const returnUrl = `${base}?merci=1&id=${inscription.id}`
-
-    let checkoutUrl
-
-    if (process.env.TEST_MODE === 'true') {
-      console.log('[TEST MODE] Relance paiement — HelloAsso ignoré')
-      checkoutUrl = returnUrl
-    } else {
-      const token = await getToken()
-      const slug = process.env.HELLOASSO_ORG_SLUG
-      const itemName = `Gan Israel — Inscription #${inscription.id}`
-      console.log(`[Relance HelloAsso] slug="${slug}" amount=${Math.round(amount * 100)} return=${returnUrl}`)
-
-      const response = await fetch(
-        `${HA_BASE}/v5/organizations/${slug}/checkout-intents`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            totalAmount:      Math.round(amount * 100),
-            initialAmount:    Math.round(amount * 100),
-            itemName,
-            backUrl:          base,
-            errorUrl:         base,
-            returnUrl,
-            containsDonation: false,
-          }),
-        }
-      )
-
-      const rawText = await response.text()
-      console.log(`[Relance HelloAsso] HTTP ${response.status}: ${rawText}`)
-      if (!response.ok) {
-        return res.status(502).json({ error: 'HelloAsso error', status: response.status, body: rawText })
-      }
-      const data = JSON.parse(rawText)
-      if (!data.redirectUrl) {
-        return res.status(502).json({ error: 'HelloAsso no redirectUrl', details: data })
-      }
-      checkoutUrl = data.redirectUrl
-    }
-
+    const checkoutUrl = await createSoldeCheckoutUrl(inscription)
     await sendPaymentRetryEmail(inscription, checkoutUrl)
-    console.log(`[Relance paiement] ✓ #${inscription.id} → ${inscription.email} (${amount}€)`)
+    console.log(`[Relance paiement] ✓ #${inscription.id} → ${inscription.email}`)
     res.json({ ok: true })
   } catch (err) {
     const cause = err.cause ? ` — cause: ${err.cause?.code || err.cause?.message || String(err.cause)}` : ''
@@ -629,10 +627,19 @@ app.post('/api/admin/relance-email', async (req, res) => {
     i.email
   )
 
+  // Un seul token HelloAsso réutilisé pour toute la série de liens de paiement
+  let token = null
+  try {
+    if (process.env.TEST_MODE !== 'true') token = await getToken()
+  } catch (err) {
+    return res.status(502).json({ error: `HelloAsso injoignable : ${err.message}` })
+  }
+
   let sent = 0, errors = []
   for (const insc of avecSolde) {
     try {
-      await sendReminderToParent(insc)
+      const checkoutUrl = await createSoldeCheckoutUrl(insc, token)
+      await sendReminderToParent(insc, checkoutUrl)
       sent++
       console.log(`[Relance] ✓ ${insc.parent1_prenom} ${insc.parent1_nom} <${insc.email}>`)
     } catch (err) {
@@ -642,6 +649,35 @@ app.post('/api/admin/relance-email', async (req, res) => {
   }
 
   res.json({ ok: true, sent, errors, total: avecSolde.length })
+})
+
+// ── Admin — envoi d'un email de relance TEST (une seule adresse, données fictives) ──
+app.post('/api/admin/relance-email/test', async (req, res) => {
+  if (!authAdmin(req, res)) return
+  const email = (req.body?.email || '').trim()
+  if (!email) return res.status(400).json({ error: 'Email requis' })
+
+  // Inscription fictive représentative pour visualiser l'email de relance
+  const sample = {
+    id: 'TEST',
+    email,
+    parent1_prenom: 'Parent',
+    parent1_nom: 'Test',
+    total: 525,
+    accompte: 180,
+    enfants: [{ prenom: 'Lévi', nom: 'Test', classe: 'Gan 1', semaines: [1, 2, 3], garderie: [1] }],
+  }
+
+  try {
+    const checkoutUrl = await createSoldeCheckoutUrl(sample)
+    await sendReminderToParent(sample, checkoutUrl)
+    console.log(`[Relance TEST] ✓ → ${email}`)
+    res.json({ ok: true, email })
+  } catch (err) {
+    const cause = err.cause ? ` — cause: ${err.cause?.code || err.cause?.message || String(err.cause)}` : ''
+    console.error('[Relance TEST] ✗', err.message + cause)
+    res.status(500).json({ error: err.message + cause })
+  }
 })
 
 // ── Liste d'attente ───────────────────────────────────────────────────────────
