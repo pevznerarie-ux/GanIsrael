@@ -239,8 +239,19 @@ app.post('/api/confirm-payment', async (req, res) => {
   const inscription = getInscription(id)
   if (!inscription) return res.status(404).json({ error: 'Inscription introuvable' })
 
-  // Éviter l'envoi en double si déjà traité
+  // Déjà traité : si un solde restait dû, ce retour de paiement = paiement de relance
+  // → on solde le CRM (couvre aussi les anciens liens sans marqueur solde=1)
   if (inscription.email_envoye) {
+    const solde = Number(inscription.total) - Number(inscription.accompte)
+    if (solde > 0 && inscription.statut !== 'solde_paye' && inscription.statut !== 'annule') {
+      updateInscription(id, {
+        accompte:            Number(inscription.total),
+        statut:              'solde_paye',
+        solde_mode_paiement: 'cb',
+      })
+      console.log(`[confirm-payment] #${id} → solde réglé via relance (${inscription.total} €)`)
+      return res.json({ ok: true, soldePaid: true })
+    }
     console.log(`[confirm-payment] #${id} déjà traité`)
     return res.json({ ok: true, alreadySent: true })
   }
@@ -290,6 +301,29 @@ app.post('/api/confirm-payment', async (req, res) => {
     })
   }
 
+  res.json({ ok: true })
+})
+
+// ── Confirmation paiement de solde (retour d'un lien de relance) ─────────────
+// Met à jour le CRM : solde réglé → accompte = total, statut = solde_paye
+app.post('/api/confirm-solde-payment', async (req, res) => {
+  const { id } = req.body
+  if (!id) return res.status(400).json({ error: 'ID manquant' })
+
+  const inscription = getInscription(id)
+  if (!inscription) return res.status(404).json({ error: 'Inscription introuvable' })
+
+  if (inscription.statut === 'solde_paye') {
+    console.log(`[confirm-solde] #${id} déjà soldé`)
+    return res.json({ ok: true, alreadyPaid: true })
+  }
+
+  updateInscription(id, {
+    accompte:            Number(inscription.total),
+    statut:              'solde_paye',
+    solde_mode_paiement: 'cb',
+  })
+  console.log(`[confirm-solde] ✓ #${id} → solde réglé via relance (${inscription.total} €)`)
   res.json({ ok: true })
 })
 
@@ -432,7 +466,8 @@ async function createSoldeCheckoutUrl(inscription, token) {
   // sinon paiement complet (total)
   const soldeRestant = Number(inscription.total) - Number(inscription.accompte)
   const amount = soldeRestant > 0 ? soldeRestant : Number(inscription.total)
-  const returnUrl = `${base}?merci=1&id=${inscription.id}`
+  // solde=1 : au retour, le CRM marque le solde réglé (paiement de relance)
+  const returnUrl = `${base}?merci=1&id=${inscription.id}&solde=1`
 
   if (process.env.TEST_MODE === 'true') {
     console.log('[TEST MODE] Relance paiement — HelloAsso ignoré')

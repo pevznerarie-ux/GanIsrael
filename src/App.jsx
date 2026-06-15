@@ -22,10 +22,14 @@ export default function App() {
   const showThankYou = params.get('merci') === '1'
   const inscriptionId = params.get('id')
   const paiementMode = params.get('mode') || ''
+  const isSoldePayment = params.get('solde') === '1'
 
   useEffect(() => {
     if (!showThankYou || !inscriptionId) return
-    fetch('/api/confirm-payment', {
+    // solde=1 : retour d'un lien de relance → on marque le solde réglé dans le CRM.
+    // Sinon : confirmation du paiement initial (emails + statut).
+    const endpoint = isSoldePayment ? '/api/confirm-solde-payment' : '/api/confirm-payment'
+    fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: inscriptionId }),
