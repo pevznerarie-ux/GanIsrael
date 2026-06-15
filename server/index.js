@@ -769,6 +769,81 @@ app.post('/api/admin/relance-email/test', async (req, res) => {
   }
 })
 
+// ── Admin — synchroniser les paiements HelloAsso → CRM ────────────────────────
+// Rattrape les paiements déjà faits (avant le webhook). Match : metadata.inscriptionId
+// en priorité, sinon email du payeur + montant exact du solde restant.
+app.post('/api/admin/sync-paiements', async (req, res) => {
+  if (!authAdmin(req, res)) return
+
+  if (process.env.TEST_MODE === 'true') {
+    return res.json({ ok: true, updated: 0, scanned: 0, note: 'TEST_MODE actif — HelloAsso ignoré' })
+  }
+
+  try {
+    const token = await getToken()
+    const slug = process.env.HELLOASSO_ORG_SLUG
+    const from = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString()
+
+    // 1. Récupère tous les paiements encaissés (90 derniers jours, paginé)
+    const payments = []
+    let continuationToken = null
+    let guard = 0
+    do {
+      const url = new URL(`${HA_BASE}/v5/organizations/${slug}/payments`)
+      url.searchParams.set('pageSize', '100')
+      url.searchParams.set('from', from)
+      url.searchParams.append('states', 'Authorized')
+      url.searchParams.append('states', 'Registered')
+      if (continuationToken) url.searchParams.set('continuationToken', continuationToken)
+
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (!r.ok) { const t = await r.text(); throw new Error(`HelloAsso payments HTTP ${r.status}: ${t}`) }
+      const json = await r.json()
+      const page = json.data || []
+      payments.push(...page)
+      continuationToken = json.pagination?.continuationToken || null
+      if (page.length === 0) break
+    } while (continuationToken && ++guard < 25)
+
+    // 2. Inscriptions avec un solde restant
+    const pending = getAllInscriptions().filter(i =>
+      i.statut !== 'annule' && i.statut !== 'solde_paye' &&
+      (Number(i.total) - Number(i.accompte)) > 0 && i.email
+    )
+
+    // 3. Match + mise à jour
+    let updated = 0
+    const details = []
+    for (const insc of pending) {
+      const solde = Number(insc.total) - Number(insc.accompte)
+      const soldeCents = Math.round(solde * 100)
+      const email = String(insc.email).trim().toLowerCase()
+
+      const match = payments.find(p => {
+        const meta = p.metadata || p.order?.metadata
+        if (meta?.inscriptionId && String(meta.inscriptionId) === String(insc.id)) return true
+        const payerEmail = String(p.payer?.email || '').trim().toLowerCase()
+        const amt = (p.amount && typeof p.amount === 'object') ? p.amount.total : p.amount
+        return payerEmail && payerEmail === email && Number(amt) === soldeCents
+      })
+
+      if (match) {
+        updateInscription(insc.id, { accompte: Number(insc.total), statut: 'solde_paye', solde_mode_paiement: 'cb' })
+        updated++
+        details.push({ id: insc.id, nom: `${insc.parent1_prenom} ${insc.parent1_nom}`, email: insc.email, solde })
+        console.log(`[Sync paiements] ✓ #${insc.id} → solde réglé (${solde} €)`)
+      }
+    }
+
+    console.log(`[Sync paiements] ${payments.length} paiements scannés, ${updated} inscription(s) mises à jour`)
+    res.json({ ok: true, scanned: payments.length, pending: pending.length, updated, details })
+  } catch (err) {
+    const cause = err.cause ? ` — cause: ${err.cause?.code || err.cause?.message || String(err.cause)}` : ''
+    console.error('[Sync paiements] ✗', err.message + cause)
+    res.status(500).json({ error: err.message + cause })
+  }
+})
+
 // ── Liste d'attente ───────────────────────────────────────────────────────────
 app.post('/api/liste-attente', async (req, res) => {
   const { prenom, nom, email, telephone, classes, semaines } = req.body

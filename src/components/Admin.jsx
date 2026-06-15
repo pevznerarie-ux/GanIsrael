@@ -1942,6 +1942,8 @@ function TabWhatsapp({ inscriptions, user, password }) {
   const [testEmail, setTestEmail] = useState('pevznerarie@gmail.com')
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
 
   const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
 
@@ -1972,6 +1974,21 @@ function TabWhatsapp({ inscriptions, user, password }) {
       setTestResult({ ok: false, error: 'Erreur réseau' })
     } finally {
       setTesting(false)
+    }
+  }
+
+  const handleSyncPaiements = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/admin/sync-paiements', { method: 'POST', headers })
+      const data = await res.json()
+      setSyncResult(res.ok ? data : { ok: false, error: data.error })
+      if (res.ok && data.updated > 0) setTimeout(() => window.location.reload(), 1500)
+    } catch {
+      setSyncResult({ ok: false, error: 'Erreur réseau' })
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -2092,6 +2109,25 @@ function TabWhatsapp({ inscriptions, user, password }) {
           {testResult && (
             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: testResult.ok ? '#15803d' : '#dc2626' }}>
               {testResult.ok ? '✅ Test envoyé' : `❌ ${testResult.error || 'Erreur'}`}
+            </span>
+          )}
+        </div>
+
+        {/* Synchronisation des paiements HelloAsso → CRM */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', padding: '0.75rem 0.9rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, marginBottom: '1rem' }}>
+          <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>🔄 Synchroniser les paiements déjà encaissés sur HelloAsso :</span>
+          <button
+            onClick={handleSyncPaiements}
+            disabled={syncing}
+            style={{ padding: '0.4rem 1rem', background: syncing ? '#cbd5e1' : '#16a34a', color: 'white', border: 'none', borderRadius: 6, fontFamily: 'inherit', fontWeight: 700, cursor: syncing ? 'not-allowed' : 'pointer', fontSize: '0.85rem' }}
+          >
+            {syncing ? '⏳ Synchronisation…' : '🔄 Mettre à jour les paiements'}
+          </button>
+          {syncResult && (
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: syncResult.ok ? '#15803d' : '#dc2626' }}>
+              {syncResult.ok
+                ? `✅ ${syncResult.updated} mise(s) à jour · ${syncResult.scanned} paiement(s) scannés`
+                : `❌ ${syncResult.error || 'Erreur'}`}
             </span>
           )}
         </div>
