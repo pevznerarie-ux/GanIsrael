@@ -1,6 +1,6 @@
 const CLASSES = ['Pre Gan', 'Gan 1', 'Gan 2', 'Gan 3']
 
-export default function Hero() {
+export default function Hero({ open = false }) {
   return (
     <>
       <section className="hero">
@@ -36,16 +36,29 @@ export default function Hero() {
               marginBottom: 16,
               backdropFilter: 'blur(8px)',
             }}>
-              <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 16, color: 'white' }}>
-                🔒 Les inscriptions pour l'été 2026 sont fermées.
-              </p>
-              <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
-                Toutes les places sont pourvues. Vous pouvez vous inscrire sur la liste d'attente — nous vous contacterons en priorité si une place se libère.
-              </p>
+              {open ? (
+                <>
+                  <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 16, color: 'white' }}>
+                    ✅ Les inscriptions sont ouvertes.
+                  </p>
+                  <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
+                    Remplissez le formulaire ci-dessous pour inscrire votre/vos enfant(s). Votre demande sera validée par la direction.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ margin: '0 0 10px', fontWeight: 700, fontSize: 16, color: 'white' }}>
+                    🔒 Les inscriptions pour l'été 2026 sont fermées.
+                  </p>
+                  <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
+                    Toutes les places sont pourvues. Vous pouvez vous inscrire sur la liste d'attente — nous vous contacterons en priorité si une place se libère.
+                  </p>
+                </>
+              )}
             </div>
 
             <a href="#inscription" className="hero-cta">
-              📋 Rejoindre la liste d'attente
+              {open ? '📋 S\'inscrire maintenant' : '📋 Rejoindre la liste d\'attente'}
             </a>
           </div>
         </div>

@@ -4,6 +4,7 @@ import Header from './components/Header'
 import Hero from './components/Hero'
 import PricingGrid from './components/PricingGrid'
 import WaitingListForm from './components/WaitingListForm'
+import InscriptionForm from './components/InscriptionForm'
 import InscriptionReservee from './components/InscriptionReservee'
 import Programme from './components/Programme'
 import Footer from './components/Footer'
@@ -33,6 +34,10 @@ export default function App() {
 
   if (showThankYou) return <ThankYou />
 
+  // Lien spécial ?mode=autre : ré-ouvre le formulaire complet d'inscription
+  // (paiement intégral, demande soumise à validation admin)
+  const inscriptionsOuvertes = paiementMode === 'autre'
+
   return (
     <>
       <div className="aurora-bg" aria-hidden="true">
@@ -43,10 +48,10 @@ export default function App() {
       </div>
       <Header />
       <main>
-        <Hero />
+        <Hero open={inscriptionsOuvertes} />
         <PricingGrid />
         <Programme />
-        <WaitingListForm />
+        {inscriptionsOuvertes ? <InscriptionForm paiementMode="autre" /> : <WaitingListForm />}
       </main>
       <Footer />
     </>
