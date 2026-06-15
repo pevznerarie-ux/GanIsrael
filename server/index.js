@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { createHmac } from 'node:crypto'
 import 'dotenv/config'
 import { insertInscription, getInscription, markEmailSent, markReceiptSent, getAllInscriptions, updateStatut, updateInscription, deleteInscription, countByClasseAndSemaine, getAllVisiteurs, insertVisiteur, updateVisiteur, deleteVisiteur, recordVisit, getAnalytics, onVisit, getAllListeAttente, insertListeAttente, deleteListeAttente, updateListeAttente, createToken, getTokenData } from './db.js'
 import { sendConfirmationToParent, sendNotificationToAdmin, sendReceiptToParent, sendReminderToParent, sendPaymentRetryEmail, sendWaitingListConfirmation, sendWaitingListAcceptance } from './email.js'
@@ -10,7 +11,8 @@ import { generateReceiptPDF } from './receipt.js'
 const app = express()
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-app.use(express.json())
+// On garde le corps brut pour vérifier la signature des webhooks HelloAsso
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf } }))
 app.use(cors({ origin: /localhost/ }))
 
 // ── Tracking des visites (pages HTML uniquement) ──────────────────────────────
@@ -335,6 +337,17 @@ app.post('/api/helloasso-webhook', (req, res) => {
   // Toujours répondre 200 tout de suite (HelloAsso renvoie sinon en boucle)
   res.json({ ok: true })
   try {
+    // Vérification de signature (optionnelle : active seulement si la clé est configurée)
+    const key = process.env.HELLOASSO_WEBHOOK_SIGNATURE_KEY
+    if (key) {
+      const expected = createHmac('sha256', key).update(req.rawBody || Buffer.from('')).digest('hex')
+      const received = req.headers['x-ha-signature'] || ''
+      if (expected !== received) {
+        console.warn('[HelloAsso webhook] signature invalide — notification ignorée')
+        return
+      }
+    }
+
     const body = req.body || {}
     const data = body.data || {}
     // La metadata peut se trouver à plusieurs endroits selon le type d'événement
