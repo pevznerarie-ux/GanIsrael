@@ -327,6 +327,45 @@ app.post('/api/confirm-solde-payment', async (req, res) => {
   res.json({ ok: true })
 })
 
+// ── Webhook HelloAsso — mise à jour auto du CRM dès le paiement ───────────────
+// À configurer dans HelloAsso (URL de notification) :
+//   https://<domaine>/api/helloasso-webhook
+// On agit uniquement sur les paiements de relance (metadata.inscriptionId présent).
+app.post('/api/helloasso-webhook', (req, res) => {
+  // Toujours répondre 200 tout de suite (HelloAsso renvoie sinon en boucle)
+  res.json({ ok: true })
+  try {
+    const body = req.body || {}
+    const data = body.data || {}
+    // La metadata peut se trouver à plusieurs endroits selon le type d'événement
+    const meta = body.metadata || data.metadata || data.order?.metadata || {}
+    const inscriptionId = meta.inscriptionId
+    console.log(`[HelloAsso webhook] event=${body.eventType || '?'} inscriptionId=${inscriptionId || '—'}`)
+    if (!inscriptionId) return  // pas un paiement de relance → on ignore
+
+    // État du paiement : on ignore les échecs / remboursements / en attente
+    const state = String(data.state || data.paymentReceipt?.state || '')
+    const KO = ['Refused', 'Refunded', 'Canceled', 'Pending', 'Unknown']
+    if (state && KO.includes(state)) {
+      console.log(`[HelloAsso webhook] #${inscriptionId} ignoré (state=${state})`)
+      return
+    }
+
+    const inscription = getInscription(inscriptionId)
+    if (!inscription) { console.warn(`[HelloAsso webhook] inscription #${inscriptionId} introuvable`); return }
+    if (inscription.statut === 'solde_paye') return
+
+    updateInscription(inscriptionId, {
+      accompte:            Number(inscription.total),
+      statut:              'solde_paye',
+      solde_mode_paiement: 'cb',
+    })
+    console.log(`[HelloAsso webhook] ✓ #${inscriptionId} → solde réglé (${inscription.total} €, event=${body.eventType || '?'})`)
+  } catch (err) {
+    console.error('[HelloAsso webhook] erreur:', err.message)
+  }
+})
+
 // ── Admin — saisie manuelle d'inscription ────────────────────────────────────
 app.post('/api/admin/inscriptions', (req, res) => {
   if (!authAdmin(req, res)) return
@@ -494,6 +533,8 @@ async function createSoldeCheckoutUrl(inscription, token) {
         errorUrl:         base,
         returnUrl,
         containsDonation: false,
+        // Renvoyé tel quel dans la notification HelloAsso → permet de retrouver l'inscription
+        metadata:         { inscriptionId: String(inscription.id), type: 'solde' },
       }),
     }
   )
