@@ -523,13 +523,7 @@ export default function InscriptionForm({ paiementMode }) {
           {/* Mode de paiement */}
           <div className="form-group-title">💳 Mode de paiement</div>
           {modeAutre ? (
-            <div className="payment-autre-notice">
-              <span className="payment-autre-icon">💵</span>
-              <div>
-                <strong>Paiement intégral en espèces</strong>
-                {total > 0 && <p>Montant total : <strong>{total} €</strong> — à régler directement auprès de la direction.</p>}
-              </div>
-            </div>
+            <div className="payment-empty-box" />
           ) : (
             <>
               <div className="payment-modes">

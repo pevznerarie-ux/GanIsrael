@@ -2316,6 +2316,14 @@ header, main, footer { position: relative; z-index: 1; }
 .payment-autre-notice strong { color: #5b21b6; font-size: 1rem; }
 .payment-autre-notice p { margin: 0.25rem 0 0; color: #6d28d9; font-size: 0.9rem; }
 
+.payment-empty-box {
+  background: #f1f5f9;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  min-height: 90px;
+  margin-bottom: 1rem;
+}
+
 .inscription-autre-success {
   text-align: center;
   padding: 2rem 1rem;
