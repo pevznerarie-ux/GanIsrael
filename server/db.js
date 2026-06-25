@@ -137,6 +137,7 @@ export function insertInscription(data) {
     accompte_mode_paiement: 'cb',
     solde_mode_paiement:   '',
     remise:                0,
+    note:                  '',
     formData:              data,
   })
   save(db)

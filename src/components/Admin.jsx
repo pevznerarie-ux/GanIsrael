@@ -123,7 +123,7 @@ function exportCSV(inscriptions) {
         totalNet,
         i.accompte,
         solde,
-        i.solde_mode_paiement || '',
+        toModeArray(i.solde_mode_paiement).join(' + '),
         STATUTS[i.statut]?.label || i.statut,
         i.recu_envoye ? 'Oui' : 'Non',
       ])
@@ -1192,6 +1192,89 @@ function ModalPaiementPartiel({ inscription, user, password, onSent, onClose }) 
   )
 }
 
+// ── Modes de paiement multi-sélection (cases à cocher) ───────────────────────
+const MODE_OPTIONS = [
+  { value: 'cb',      label: '💳 CB' },
+  { value: 'especes', label: '💵 Espèces' },
+  { value: 'cheque',  label: '📝 Chèque' },
+  { value: 'autre',   label: '📋 Autre' },
+]
+
+// Normalise une valeur (string héritée, tableau, ou vide) en tableau de modes
+function toModeArray(v) {
+  if (Array.isArray(v)) return v.filter(Boolean)
+  if (typeof v === 'string' && v.trim()) return v.split(',').map(s => s.trim()).filter(Boolean)
+  return []
+}
+
+function ModePaiementChecks({ value, onChange }) {
+  const sel = toModeArray(value)
+  const toggle = (m) => onChange(sel.includes(m) ? sel.filter(x => x !== m) : [...sel, m])
+  return (
+    <div className="mode-checks">
+      {MODE_OPTIONS.map(o => (
+        <label key={o.value} className={`mode-check ${sel.includes(o.value) ? 'on' : ''}`}>
+          <input type="checkbox" checked={sel.includes(o.value)} onChange={() => toggle(o.value)} />
+          {o.label}
+        </label>
+      ))}
+    </div>
+  )
+}
+
+// ── Modal — note libre sur une famille ───────────────────────────────────────
+function ModalNote({ inscription, user, password, onSaved, onClose }) {
+  const [note, setNote] = useState(inscription.note || '')
+  const [saving, setSaving] = useState(false)
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  const handleSave = async () => {
+    setSaving(true)
+    await fetch(`/api/admin/inscriptions/${inscription.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ note }),
+    })
+    onSaved()
+    setSaving(false)
+    onClose()
+  }
+
+  return (
+    <div className="crm-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="crm-modal" style={{ maxWidth: 480 }}>
+        <div className="crm-modal-header">
+          <strong>📝 Note — {inscription.parent1_prenom} {inscription.parent1_nom}</strong>
+          <button className="crm-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="crm-modal-body">
+          <div className="form-field">
+            <label>Note interne (visible uniquement dans le CRM)</label>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              rows={5}
+              autoFocus
+              placeholder="Ex : a payé 100€ en espèces + 50€ chèque, reste à régler en juillet…"
+              style={{ width: '100%', resize: 'vertical', padding: '0.6rem 0.75rem', border: '1.5px solid #e2e8f0', borderRadius: 8, fontFamily: 'inherit', fontSize: '0.9rem', lineHeight: 1.5 }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'space-between', marginTop: '1rem' }}>
+            {inscription.note
+              ? <button type="button" onClick={() => setNote('')} style={{ padding: '0.5rem 1rem', background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: 8, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer', fontSize: '0.84rem' }}>🗑 Effacer</button>
+              : <span />}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="button" className="btn-refresh" style={{ borderRadius: 8 }} onClick={onClose}>Annuler</button>
+              <button onClick={handleSave} disabled={saving} className="btn-submit" style={{ padding: '0.5rem 1.5rem' }}>
+                {saving ? '⏳ Enregistrement…' : '✅ Enregistrer la note'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TabFamilles({ inscriptions, user, password, onStatutChange, onInscriptionAdded, onInscriptionDeleted, onInscriptionUpdated }) {
   const [filter, setFilter] = useState('tous')
   const [search, setSearch] = useState('')
@@ -1207,6 +1290,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
   const [editInscription, setEditInscription] = useState(null)
   const [echelonnerFor, setEchelonnerFor] = useState(null)
   const [partielFor, setPartielFor] = useState(null)
+  const [noteFor, setNoteFor] = useState(null)
   const tableWrapRef = useRef(null)
   const [ignoredPairs, setIgnoredPairs] = useState(() => {
     try { return JSON.parse(localStorage.getItem('gan_doublon_ignore') || '[]') } catch { return [] }
@@ -1313,6 +1397,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
       {editInscription && <FormEditInscription inscription={editInscription} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setEditInscription(null)} />}
       {echelonnerFor && <ModalEchelonnement inscription={echelonnerFor} user={user} password={password} onSent={onInscriptionUpdated} onClose={() => setEchelonnerFor(null)} />}
       {partielFor && <ModalPaiementPartiel inscription={partielFor} user={user} password={password} onSent={onInscriptionUpdated} onClose={() => setPartielFor(null)} />}
+      {noteFor && <ModalNote inscription={noteFor} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setNoteFor(null)} />}
 
       {/* Modale confirmation suppression */}
       {confirmDelete && (
@@ -1404,6 +1489,11 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                     <td>
                       <strong>{i.parent1_prenom} {i.parent1_nom}</strong>
                       {i.parent2_prenom && <div className="td-sub">{i.parent2_prenom} {i.parent2_nom}</div>}
+                      {i.note && (
+                        <div className="td-note" title={i.note} onClick={() => setNoteFor(i)}>
+                          📝 {i.note}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
@@ -1437,42 +1527,29 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                       {i.mode_paiement === 'autre' ? (
                         <span className="badge-mode" style={{ background: '#ede9fe', color: '#6d28d9' }}>💵 Espèces directes</span>
                       ) : (
-                        <select
-                          className="paiement-mode-select"
-                          value={i.accompte_mode_paiement || 'cb'}
-                          onChange={async e => {
-                            const val = e.target.value
+                        <ModePaiementChecks
+                          value={i.accompte_mode_paiement ?? 'cb'}
+                          onChange={async arr => {
                             await fetch(`/api/admin/inscriptions/${i.id}`, {
                               method: 'PATCH', headers,
-                              body: JSON.stringify({ accompte_mode_paiement: val }),
+                              body: JSON.stringify({ accompte_mode_paiement: arr }),
                             })
                             onInscriptionUpdated()
                           }}
-                        >
-                          <option value="cb">💳 CB</option>
-                          <option value="especes">💵 Espèces</option>
-                          <option value="cheque">📝 Chèque</option>
-                        </select>
+                        />
                       )}
                     </td>
                     <td>
-                      <select
-                        className="solde-mode-select"
-                        value={i.solde_mode_paiement || ''}
-                        onChange={async e => {
-                          const val = e.target.value
+                      <ModePaiementChecks
+                        value={i.solde_mode_paiement}
+                        onChange={async arr => {
                           await fetch(`/api/admin/inscriptions/${i.id}`, {
                             method: 'PATCH', headers,
-                            body: JSON.stringify({ solde_mode_paiement: val }),
+                            body: JSON.stringify({ solde_mode_paiement: arr }),
                           })
                           onInscriptionUpdated()
                         }}
-                      >
-                        <option value="">—</option>
-                        <option value="cb">💳 CB</option>
-                        <option value="especes">💵 Espèces</option>
-                        <option value="cheque">📝 Chèque</option>
-                      </select>
+                      />
                     </td>
                     <td>
                       <div className="td-total">{i.total} €</div>
@@ -1566,6 +1643,13 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                             🟠 Paiement partiel
                           </button>
                         )}
+                        <button
+                          className={`crm-btn-action crm-btn-action-note${i.note ? ' crm-btn-action-note--on' : ''}`}
+                          onClick={() => setNoteFor(i)}
+                          title={i.note ? `Note : ${i.note}` : 'Ajouter une note'}
+                        >
+                          {i.note ? '📝 Note ✓' : '📝 Note'}
+                        </button>
                         <button className="crm-btn-action crm-btn-action-add" onClick={() => setAddEnfantTo(i)} title="Ajouter un enfant">
                           👶 Enfant
                         </button>
