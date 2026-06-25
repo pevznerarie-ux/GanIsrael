@@ -286,20 +286,67 @@ export async function sendReminderToParent(insc, checkoutUrl) {
 }
 
 // ── Relance paiement non abouti (lien HelloAsso personnalisé) ────────────────
-export async function sendPaymentRetryEmail(insc, checkoutUrl) {
+// installmentPlan (optionnel) : { n, montant, schedule: [{ amount, date, immediate }] } → paiement en plusieurs fois
+// opts (optionnel) : { amount: <€ exact à régler>, isPartial: <paiement partiel> }
+export async function sendPaymentRetryEmail(insc, checkoutUrl, installmentPlan = null, opts = {}) {
   const email   = insc.email || insc.formData?.email
   const prenom  = insc.parent1_prenom || insc.formData?.parent1Prenom
   const nom     = insc.parent1_nom    || insc.formData?.parent1Nom
   const enfants = insc.enfants || []
   const enfantsNoms = enfants.map(e => `${e.prenom} ${e.nom}`).join(' et ') || 'votre enfant'
-  const soldeRestant = Number(insc.total) - Number(insc.accompte)
-  const montant = soldeRestant > 0 ? soldeRestant : Number(insc.total)
+  const totalNet = Number(insc.total) - Number(insc.remise || 0)
+  const soldeRestant = totalNet - Number(insc.accompte)
+  const montantDu = soldeRestant > 0 ? soldeRestant : totalNet
+  const isPartial = !!opts.isPartial
+  const montant = opts.amount != null ? Number(opts.amount) : montantDu
   const isFullCB = insc.mode_paiement === 'cb'
+  const resteApres = Math.max(0, montantDu - montant) // solde restant après un paiement partiel
+
+  const fmtDate = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+  const fmtEur  = (n) => Number.isInteger(n) ? `${n} €` : `${Number(n).toFixed(2)} €`
+
+  // Bloc échéancier (paiement en plusieurs fois)
+  const echeancier = installmentPlan ? `
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin-bottom:24px">
+      <p style="margin:0 0 10px;font-size:14px;font-weight:800;color:#15803d">
+        🗓️ Paiement en ${installmentPlan.n} fois — total ${fmtEur(installmentPlan.montant)}
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        ${installmentPlan.schedule.map((t, idx) => `
+        <tr>
+          <td style="padding:5px 0;color:#475569">Échéance ${idx + 1}${t.immediate ? ' <span style="color:#16a34a;font-weight:700">(aujourd\'hui)</span>' : ` — le ${fmtDate(t.date)}`}</td>
+          <td style="padding:5px 0;text-align:right;font-weight:700;color:#1e3a8a">${fmtEur(t.amount)}</td>
+        </tr>`).join('')}
+      </table>
+      <p style="margin:10px 0 0;font-size:12px;color:#15803d;line-height:1.5">
+        Vous réglez la 1<sup>re</sup> échéance maintenant ; les suivantes sont prélevées automatiquement aux dates indiquées.
+      </p>
+    </div>` : ''
+
+  // Bloc paiement partiel (orange)
+  const blocPartiel = (isPartial && !installmentPlan) ? `
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px 18px;margin-bottom:24px">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:800;color:#c2410c">🟠 Paiement partiel — ${fmtEur(montant)}</p>
+      <p style="margin:0;font-size:13px;color:#9a3412;line-height:1.6">
+        Vous réglez aujourd'hui une partie de votre inscription.${resteApres > 0 ? ` Il restera <strong>${fmtEur(resteApres)}</strong> à régler ultérieurement.` : ''}
+      </p>
+    </div>` : ''
+
+  const montantBouton = installmentPlan ? installmentPlan.schedule[0].amount : montant
+  const sousTitreBouton = installmentPlan
+    ? `1<sup>re</sup> échéance sur ${installmentPlan.n} — paiement sécurisé via HelloAsso`
+    : isPartial
+    ? `Paiement partiel sécurisé via HelloAsso${resteApres > 0 ? ` — solde restant ${fmtEur(resteApres)}` : ''}`
+    : `Paiement sécurisé via HelloAsso${isFullCB ? ' — paiement total' : ' — acompte de réservation'}`
 
   await sendEmail({
     from: 'Gan Israel Beth Hillel <ganisrael@bethmenahem-lis.com>',
     to: email,
-    subject: `⚠️ Inscription Gan Israel — votre paiement n'a pas abouti`,
+    subject: installmentPlan
+      ? `💳 Inscription Gan Israel — votre paiement en ${installmentPlan.n} fois`
+      : isPartial
+      ? `💶 Inscription Gan Israel — votre paiement partiel de ${fmtEur(montant)}`
+      : `⚠️ Inscription Gan Israel — votre paiement n'a pas abouti`,
     html: `
 <!DOCTYPE html>
 <html lang="fr">
@@ -317,19 +364,25 @@ export async function sendPaymentRetryEmail(insc, checkoutUrl) {
 
     <div style="background:#fff7ed;border-left:4px solid #f97316;padding:16px;border-radius:0 8px 8px 0;margin-bottom:24px">
       <p style="margin:0 0 10px;color:#9a3412;font-size:16px;font-weight:700">
-        Votre demande d'inscription pour <strong>${enfantsNoms}</strong> au Gan Israel a bien été reçue, mais votre paiement de <strong>${montant} €</strong> n'a pas abouti.
+        ${installmentPlan
+          ? `Pour faciliter le règlement de l'inscription de <strong>${enfantsNoms}</strong> au Gan Israel, nous vous proposons un paiement échelonné en <strong>${installmentPlan.n} fois</strong>.`
+          : isPartial
+          ? `Pour l'inscription de <strong>${enfantsNoms}</strong> au Gan Israel, voici votre lien pour régler un <strong>paiement partiel de ${fmtEur(montant)}</strong>.`
+          : `Votre demande d'inscription pour <strong>${enfantsNoms}</strong> au Gan Israel a bien été reçue, mais votre paiement de <strong>${fmtEur(montant)}</strong> n'a pas abouti.`}
       </p>
       <p style="margin:0;color:#9a3412;font-size:14px;line-height:1.6">
         Nous vous avons préparé un lien de paiement direct — cliquez simplement sur le bouton ci-dessous pour finaliser votre inscription en quelques secondes.
       </p>
     </div>
 
+    ${echeancier}${blocPartiel}
+
     <div style="text-align:center;margin:28px 0">
       <a href="${checkoutUrl}" style="display:inline-block;background:#16a34a;color:white;text-decoration:none;padding:16px 40px;border-radius:10px;font-size:17px;font-weight:800;letter-spacing:0.02em">
-        💳 Payer ${montant} € et finaliser mon inscription
+        💳 Payer ${fmtEur(montantBouton)} et finaliser mon inscription
       </a>
       <div style="margin-top:12px;font-size:12px;color:#94a3b8">
-        Paiement sécurisé via HelloAsso${isFullCB ? ' — paiement total' : ' — acompte de réservation'}
+        ${sousTitreBouton}
       </div>
     </div>
 

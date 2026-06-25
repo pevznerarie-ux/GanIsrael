@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 
 const STATUTS = {
   attente_validation: { label: '⏳ Validation admin', color: '#7c3aed', bg: '#ede9fe' },
@@ -147,19 +147,21 @@ function TabDashboard({ inscriptions }) {
 
   const nonAnnules = inscriptions.filter(i => i.statut !== 'annule')
   const totalEnfants = nonAnnules.reduce((s, i) => s + i.enfants.length, 0)
-  const totalRevenu = actives.reduce((s, i) => s + Number(i.total), 0)
+  // Montant net par inscription = total − remise (la remise réduit ce qui est dû)
+  const totalNetOf = (i) => Number(i.total) - Number(i.remise || 0)
+  const totalRevenu = actives.reduce((s, i) => s + totalNetOf(i), 0)
 
   // L'acompte est TOUJOURS 50 €/enfant, peu importe le mode de paiement.
   // En CB, accompte = total dans la DB, mais financièrement seul 50 €/enfant est l'acompte.
   const acompteTheo = (i) => ACOMPTE_PAR_ENFANT * (i.enfants || []).length
   const totalAccomptes = actives.reduce((s, i) => s + acompteTheo(i), 0)
 
-  // Solde théorique restant = total - acompte théorique
+  // Solde théorique restant = total net (remise déduite) - acompte théorique
   const totalSoldes = totalRevenu - totalAccomptes
 
-  // Solde encaissé = pour les inscriptions soldées, ce qui dépasse l'acompte théorique
+  // Solde encaissé = pour les inscriptions soldées, ce qui dépasse l'acompte théorique (sur le net)
   const soldesPayes = actives.filter(i => i.statut === 'solde_paye')
-  const soldeEncaisse = soldesPayes.reduce((s, i) => s + (Number(i.total) - acompteTheo(i)), 0)
+  const soldeEncaisse = soldesPayes.reduce((s, i) => s + (totalNetOf(i) - acompteTheo(i)), 0)
 
   // Comptage par statut sur toutes les inscriptions (pour voir les annulés/archivés)
   const byStatut = Object.fromEntries(Object.keys(STATUTS).map(k => [k, inscriptions.filter(i => i.statut === k).length]))
@@ -301,6 +303,7 @@ function FormEditInscription({ inscription, user, password, onSaved, onClose }) 
     modePaiement:  inscription.mode_paiement || 'especes_cheque',
     total:         inscription.total ?? '',
     accompte:      inscription.accompte ?? '',
+    remise:        inscription.remise ?? 0,
     statut:        inscription.statut || 'en_attente',
     enfants: (inscription.enfants || []).map(e => ({
       prenom:               e.prenom || '',
@@ -353,6 +356,7 @@ function FormEditInscription({ inscription, user, password, onSaved, onClose }) 
       mode_paiement:  form.modePaiement,
       total:          Number(form.total),
       accompte:       Number(form.accompte),
+      remise:         Number(form.remise) || 0,
       statut:         form.statut,
       enfants:        form.enfants,
       // Mise à jour de formData pour que les emails futurs utilisent les bonnes données
@@ -483,6 +487,21 @@ function FormEditInscription({ inscription, user, password, onSaved, onClose }) 
           <div className="crm-form-row">
             <div className="form-field"><label>Total (€) *</label><input required type="number" min="0" value={form.total} onChange={e => setField('total', e.target.value)} /></div>
             <div className="form-field"><label>Acompte reçu (€)</label><input type="number" min="0" value={form.accompte} onChange={e => setField('accompte', e.target.value)} /></div>
+          </div>
+          <div className="crm-form-row">
+            <div className="form-field">
+              <label>Remise (€)</label>
+              <input type="number" min="0" value={form.remise} onChange={e => setField('remise', e.target.value)} placeholder="0" />
+            </div>
+            <div className="form-field">
+              <label>Solde restant (calculé)</label>
+              <input
+                type="text"
+                readOnly
+                value={`${Math.max(0, (Number(form.total) || 0) - (Number(form.remise) || 0) - (Number(form.accompte) || 0))} €`}
+                style={{ background: '#f8fafc', color: '#dc2626', fontWeight: 700 }}
+              />
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
@@ -904,6 +923,274 @@ function FormAjoutEnfant({ inscription, user, password, onSaved, onClose }) {
   )
 }
 
+// ── Barre de défilement horizontale fixée au bas du viewport ─────────────────
+// Reflète le scroll d'un conteneur (la table) et reste visible en bas de l'écran
+// tant que ce conteneur déborde et dépasse sous le bas du viewport.
+function StickyScrollbar({ targetRef }) {
+  const barRef = useRef(null)
+  const innerRef = useRef(null)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const target = targetRef.current
+    const bar = barRef.current
+    if (!target || !bar) return
+    let syncing = false
+
+    const update = () => {
+      if (innerRef.current) innerRef.current.style.width = target.scrollWidth + 'px'
+      const overflow = target.scrollWidth > target.clientWidth + 1
+      const rect = target.getBoundingClientRect()
+      // visible seulement si la table déborde ET que son bas est sous le viewport
+      const show = overflow && rect.bottom > window.innerHeight && rect.top < window.innerHeight
+      setVisible(show)
+      bar.style.left = rect.left + 'px'
+      bar.style.width = rect.width + 'px'
+      if (!syncing) bar.scrollLeft = target.scrollLeft
+    }
+    const onTargetScroll = () => { if (syncing) return; syncing = true; bar.scrollLeft = target.scrollLeft; syncing = false }
+    const onBarScroll    = () => { if (syncing) return; syncing = true; target.scrollLeft = bar.scrollLeft; syncing = false }
+
+    update()
+    target.addEventListener('scroll', onTargetScroll)
+    bar.addEventListener('scroll', onBarScroll)
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    const ro = new ResizeObserver(update)
+    ro.observe(target)
+    return () => {
+      target.removeEventListener('scroll', onTargetScroll)
+      bar.removeEventListener('scroll', onBarScroll)
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+      ro.disconnect()
+    }
+  }, [targetRef])
+
+  return (
+    <div ref={barRef} className="sticky-hscroll" style={{ display: visible ? 'block' : 'none' }}>
+      <div ref={innerRef} className="sticky-hscroll-inner" />
+    </div>
+  )
+}
+
+// ── Modal — paiement en plusieurs fois (échelonnement) ───────────────────────
+function ModalEchelonnement({ inscription, user, password, onSent, onClose }) {
+  const [echeances, setEcheances] = useState(3)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState(null)
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+
+  const totalNet = Number(inscription.total) - Number(inscription.remise || 0)
+  const soldeRestant = totalNet - Number(inscription.accompte)
+  const montant = soldeRestant > 0 ? soldeRestant : totalNet
+
+  // Aperçu de l'échéancier (mensuel, arrondi absorbé par les premières échéances)
+  const schedule = useMemo(() => {
+    const totalCents = Math.round(montant * 100)
+    const base = Math.floor(totalCents / echeances)
+    const amounts = Array(echeances).fill(base)
+    const rem = totalCents - base * echeances
+    for (let i = 0; i < rem; i++) amounts[i] += 1
+    const today = new Date()
+    return amounts.map((c, i) => {
+      const d = new Date(today.getFullYear(), today.getMonth() + i, today.getDate())
+      return { amount: c / 100, date: d, immediate: i === 0 }
+    })
+  }, [montant, echeances])
+
+  const fmtEur = (n) => Number.isInteger(n) ? `${n} €` : `${n.toFixed(2)} €`
+  const fmtDate = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  const handleSend = async () => {
+    setSending(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/inscriptions/${inscription.id}/relance-paiement`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ echeances }),
+      })
+      if (!res.ok) throw new Error()
+      onSent()
+      onClose()
+    } catch {
+      setError("Erreur lors de l'envoi — vérifiez la connexion HelloAsso / email.")
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="crm-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="crm-modal" style={{ maxWidth: 480 }}>
+        <div className="crm-modal-header">
+          <strong>💳 Paiement en plusieurs fois — {inscription.parent1_prenom} {inscription.parent1_nom}</strong>
+          <button className="crm-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="crm-modal-body">
+          <p style={{ color: '#475569', fontSize: '0.9rem', margin: '0 0 1rem' }}>
+            Montant à régler : <strong style={{ color: '#1e3a8a' }}>{fmtEur(montant)}</strong>.
+            Choisissez le nombre d'échéances — un email avec le lien HelloAsso correspondant sera envoyé à <strong>{inscription.email}</strong>.
+          </p>
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            {[2, 3, 4].map(n => (
+              <button
+                key={n}
+                onClick={() => setEcheances(n)}
+                style={{
+                  flex: 1, padding: '0.6rem 0', borderRadius: 10, cursor: 'pointer',
+                  fontFamily: 'inherit', fontWeight: 800, fontSize: '0.95rem',
+                  border: echeances === n ? '2px solid #16a34a' : '1.5px solid #e2e8f0',
+                  background: echeances === n ? '#f0fdf4' : '#fafafa',
+                  color: echeances === n ? '#15803d' : '#64748b',
+                }}
+              >
+                {n}× fois
+              </button>
+            ))}
+          </div>
+
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+            {schedule.map((t, idx) => (
+              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: '0.85rem', borderTop: idx > 0 ? '1px solid #dcfce7' : 'none' }}>
+                <span style={{ color: '#475569' }}>
+                  Échéance {idx + 1}{t.immediate
+                    ? <span style={{ color: '#16a34a', fontWeight: 700 }}> (aujourd'hui)</span>
+                    : ` — ${fmtDate(t.date)}`}
+                </span>
+                <strong style={{ color: '#1e3a8a' }}>{fmtEur(t.amount)}</strong>
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <div style={{ padding: '8px 12px', background: '#fee2e2', borderRadius: 6, fontSize: '0.82rem', color: '#dc2626', marginBottom: '1rem' }}>
+              ❌ {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn-refresh" style={{ borderRadius: 8 }} onClick={onClose}>Annuler</button>
+            <button
+              onClick={handleSend}
+              disabled={sending}
+              style={{ padding: '0.5rem 1.5rem', background: sending ? '#a7f3d0' : '#16a34a', color: 'white', border: 'none', borderRadius: 8, fontFamily: 'inherit', fontWeight: 700, cursor: sending ? 'not-allowed' : 'pointer' }}
+            >
+              {sending ? '⏳ Envoi…' : `📧 Envoyer le lien en ${echeances}×`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal — paiement partiel (montant personnalisé, orange) ──────────────────
+function ModalPaiementPartiel({ inscription, user, password, onSent, onClose }) {
+  const headers = { 'Content-Type': 'application/json', 'x-admin-user': user, 'x-admin-password': password }
+  const totalNet = Number(inscription.total) - Number(inscription.remise || 0)
+  const soldeRestant = totalNet - Number(inscription.accompte)
+  const montantDu = soldeRestant > 0 ? soldeRestant : totalNet
+
+  const [montant, setMontant] = useState(() => Math.round(montantDu / 2))
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fmtEur = (n) => Number.isInteger(n) ? `${n} €` : `${Number(n).toFixed(2)} €`
+  const val = Number(montant)
+  const valide = Number.isFinite(val) && val > 0 && val <= montantDu
+  const reste = valide ? montantDu - val : montantDu
+
+  const handleSend = async () => {
+    setSending(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/inscriptions/${inscription.id}/relance-paiement`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ montant: val }),
+      })
+      if (!res.ok) throw new Error()
+      onSent()
+      onClose()
+    } catch {
+      setError("Erreur lors de l'envoi — vérifiez la connexion HelloAsso / email.")
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="crm-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="crm-modal" style={{ maxWidth: 460 }}>
+        <div className="crm-modal-header">
+          <strong>🟠 Paiement partiel — {inscription.parent1_prenom} {inscription.parent1_nom}</strong>
+          <button className="crm-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="crm-modal-body">
+          <p style={{ color: '#475569', fontSize: '0.9rem', margin: '0 0 1rem' }}>
+            Montant total à régler : <strong style={{ color: '#1e3a8a' }}>{fmtEur(montantDu)}</strong>.
+            Saisissez le montant partiel à demander — un email avec le lien HelloAsso correspondant sera envoyé à <strong>{inscription.email}</strong>.
+          </p>
+
+          <div className="form-field" style={{ marginBottom: '0.75rem' }}>
+            <label>Montant partiel (€) *</label>
+            <input
+              type="number"
+              min="1"
+              max={montantDu}
+              value={montant}
+              onChange={e => setMontant(e.target.value)}
+              autoFocus
+              style={{ borderColor: valide ? '#fdba74' : '#fca5a5' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            {[0.25, 0.5, 0.75].map(f => {
+              const v = Math.round(montantDu * f)
+              return (
+                <button key={f} onClick={() => setMontant(v)}
+                  style={{ flex: 1, padding: '0.4rem 0', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.8rem', border: '1.5px solid #fed7aa', background: '#fff7ed', color: '#c2410c' }}>
+                  {Math.round(f * 100)}% ({v} €)
+                </button>
+              )
+            })}
+          </div>
+
+          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
+              <span style={{ color: '#9a3412' }}>À régler maintenant</span>
+              <strong style={{ color: '#c2410c' }}>{valide ? fmtEur(val) : '—'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderTop: '1px solid #fed7aa' }}>
+              <span style={{ color: '#9a3412' }}>Solde restant après</span>
+              <strong style={{ color: '#1e3a8a' }}>{fmtEur(reste)}</strong>
+            </div>
+          </div>
+
+          {error && (
+            <div style={{ padding: '8px 12px', background: '#fee2e2', borderRadius: 6, fontSize: '0.82rem', color: '#dc2626', marginBottom: '1rem' }}>
+              ❌ {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn-refresh" style={{ borderRadius: 8 }} onClick={onClose}>Annuler</button>
+            <button
+              onClick={handleSend}
+              disabled={sending || !valide}
+              style={{ padding: '0.5rem 1.5rem', background: (sending || !valide) ? '#fdba74' : '#ea580c', color: 'white', border: 'none', borderRadius: 8, fontFamily: 'inherit', fontWeight: 700, cursor: (sending || !valide) ? 'not-allowed' : 'pointer' }}
+            >
+              {sending ? '⏳ Envoi…' : `📧 Envoyer le lien (${valide ? fmtEur(val) : '—'})`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TabFamilles({ inscriptions, user, password, onStatutChange, onInscriptionAdded, onInscriptionDeleted, onInscriptionUpdated }) {
   const [filter, setFilter] = useState('tous')
   const [search, setSearch] = useState('')
@@ -917,6 +1204,9 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
   const [validating, setValidating] = useState({})
   const [showDoublons, setShowDoublons] = useState(false)
   const [editInscription, setEditInscription] = useState(null)
+  const [echelonnerFor, setEchelonnerFor] = useState(null)
+  const [partielFor, setPartielFor] = useState(null)
+  const tableWrapRef = useRef(null)
   const [ignoredPairs, setIgnoredPairs] = useState(() => {
     try { return JSON.parse(localStorage.getItem('gan_doublon_ignore') || '[]') } catch { return [] }
   })
@@ -1020,6 +1310,8 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
       {addEnfantTo && <FormAjoutEnfant inscription={addEnfantTo} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setAddEnfantTo(null)} />}
       {showDoublons && <ModalDoublons inscriptions={inscriptions} user={user} password={password} ignoredPairs={ignoredPairs} onMerged={onInscriptionUpdated} onIgnore={addIgnoredPairs} onClose={() => setShowDoublons(false)} />}
       {editInscription && <FormEditInscription inscription={editInscription} user={user} password={password} onSaved={onInscriptionUpdated} onClose={() => setEditInscription(null)} />}
+      {echelonnerFor && <ModalEchelonnement inscription={echelonnerFor} user={user} password={password} onSent={onInscriptionUpdated} onClose={() => setEchelonnerFor(null)} />}
+      {partielFor && <ModalPaiementPartiel inscription={partielFor} user={user} password={password} onSent={onInscriptionUpdated} onClose={() => setPartielFor(null)} />}
 
       {/* Modale confirmation suppression */}
       {confirmDelete && (
@@ -1078,7 +1370,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
       {filtered.length === 0 ? (
         <div className="admin-empty">Aucune inscription trouvée.</div>
       ) : (
-        <div className="admin-table-wrap">
+        <div className="admin-table-wrap" ref={tableWrapRef}>
           <table className="admin-table">
             <thead>
               <tr>
@@ -1098,7 +1390,9 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
             </thead>
             <tbody>
               {filtered.map(i => {
-                const solde = Number(i.total) - Number(i.accompte)
+                const remise = Number(i.remise || 0)
+                const totalNet = Number(i.total) - remise
+                const solde = totalNet - Number(i.accompte)
                 return (
                   <tr key={i.id}>
                     <td className="td-id">#{i.id}</td>
@@ -1181,6 +1475,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                     </td>
                     <td>
                       <div className="td-total">{i.total} €</div>
+                      {remise > 0 && <div className="td-sub" style={{ color: '#c2410c' }}>Remise : −{remise} €</div>}
                       <div className="td-sub">Acompte : <span style={{ color: '#16a34a', fontWeight: 700 }}>{i.accompte} €</span></div>
                       {solde > 0 && <div className="td-solde">Solde : {solde} €</div>}
                     </td>
@@ -1202,17 +1497,8 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                       <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>€</div>
                     </td>
                     <td>
-                      {(() => {
-                        const remise = Number(i.remise || 0)
-                        const totalNet = Number(i.total) - remise
-                        const soldeNet = totalNet - Number(i.accompte)
-                        return (
-                          <>
-                            <div className="td-total" style={{ color: remise > 0 ? '#7c3aed' : '#1e3a8a' }}>{totalNet} €</div>
-                            {soldeNet > 0 && <div className="td-solde">Solde : {soldeNet} €</div>}
-                          </>
-                        )
-                      })()}
+                      <div className="td-total" style={{ color: remise > 0 ? '#7c3aed' : '#1e3a8a' }}>{totalNet} €</div>
+                      {solde > 0 && <div className="td-solde">Solde : {solde} €</div>}
                     </td>
                     <td>
                       <select
@@ -1259,6 +1545,24 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
                               : retryFeedback[i.id] === 'error'
                               ? '❌ Erreur'
                               : '🔗 HelloAsso'}
+                          </button>
+                        )}
+                        {i.statut !== 'solde_paye' && i.statut !== 'annule' && i.statut !== 'archive' && (
+                          <button
+                            className="crm-btn-action crm-btn-action-echelonner"
+                            onClick={() => setEchelonnerFor(i)}
+                            title="Proposer un paiement en plusieurs fois (génère un lien HelloAsso échelonné et envoie l'email)"
+                          >
+                            💳 Échelonner
+                          </button>
+                        )}
+                        {i.statut !== 'solde_paye' && i.statut !== 'annule' && i.statut !== 'archive' && (
+                          <button
+                            className="crm-btn-action crm-btn-action-partiel"
+                            onClick={() => setPartielFor(i)}
+                            title="Demander un paiement partiel d'un montant personnalisé (lien HelloAsso envoyé par email)"
+                          >
+                            🟠 Paiement partiel
                           </button>
                         )}
                         <button className="crm-btn-action crm-btn-action-add" onClick={() => setAddEnfantTo(i)} title="Ajouter un enfant">
@@ -1322,6 +1626,7 @@ function TabFamilles({ inscriptions, user, password, onStatutChange, onInscripti
           </table>
         </div>
       )}
+      {filtered.length > 0 && <StickyScrollbar targetRef={tableWrapRef} />}
     </div>
   )
 }

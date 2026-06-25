@@ -368,6 +368,13 @@ app.post('/api/helloasso-webhook', (req, res) => {
     if (!inscription) { console.warn(`[HelloAsso webhook] inscription #${inscriptionId} introuvable`); return }
     if (inscription.statut === 'solde_paye') return
 
+    // Paiement partiel ou en plusieurs fois : NE PAS marquer soldé automatiquement
+    // (le montant reçu ne couvre pas forcément le solde). L'admin ajuste manuellement.
+    if (meta.type === 'partiel') {
+      console.log(`[HelloAsso webhook] #${inscriptionId} paiement partiel/échelonné reçu — solde NON marqué auto (event=${body.eventType || '?'})`)
+      return
+    }
+
     updateInscription(inscriptionId, {
       accompte:            Number(inscription.total),
       statut:              'solde_paye',
@@ -509,26 +516,76 @@ app.post('/api/admin/inscriptions/:id/send-receipt', async (req, res) => {
   }
 })
 
+// Découpe un montant (€) en n échéances mensuelles, l'arrondi étant absorbé par
+// les premières échéances. Renvoie de quoi alimenter HelloAsso (terms en centimes)
+// et l'échéancier lisible pour l'email.
+function buildInstallments(amountEuros, n) {
+  const totalCents = Math.round(amountEuros * 100)
+  const base = Math.floor(totalCents / n)
+  const amounts = Array(n).fill(base)
+  const remainder = totalCents - base * n
+  for (let i = 0; i < remainder; i++) amounts[i] += 1
+
+  const today = new Date()
+  const localISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const terms = []        // échéances HelloAsso (hors paiement initial)
+  const schedule = []     // échéancier lisible pour l'email
+  for (let i = 0; i < n; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, today.getDate())
+    const iso = localISO(d)
+    schedule.push({ amount: amounts[i] / 100, date: iso, immediate: i === 0 })
+    if (i > 0) terms.push({ amount: amounts[i], date: iso })
+  }
+  return { totalCents, initialAmountCents: amounts[0], terms, schedule }
+}
+
 // ── Admin — relance paiement non abouti ──────────────────────────────────────
 // Génère un lien de paiement HelloAsso pour le solde restant d'une inscription.
 // `token` optionnel : à fournir pour réutiliser le même token sur une série d'appels (relance générale).
-async function createSoldeCheckoutUrl(inscription, token) {
+// `options` optionnel : { echeances: 1|2|3|4 } (paiement en plusieurs fois) ; { montant: <€> } (paiement partiel).
+// Renvoie { checkoutUrl, amount, installmentPlan, isPartial }.
+async function createSoldeCheckoutUrl(inscription, token, options = {}) {
   const base = process.env.VITE_PUBLIC_URL || 'https://ganisrael.up.railway.app'
-  // Montant à payer : solde restant (total - accompte) si un acompte a déjà été versé,
-  // sinon paiement complet (total)
-  const soldeRestant = Number(inscription.total) - Number(inscription.accompte)
-  const amount = soldeRestant > 0 ? soldeRestant : Number(inscription.total)
+  // Montant à payer : on déduit d'abord la remise du total, puis l'acompte déjà versé.
+  const totalNet = Number(inscription.total) - Number(inscription.remise || 0)
+  const soldeRestant = totalNet - Number(inscription.accompte)
+  const montantDu = soldeRestant > 0 ? soldeRestant : totalNet
+
+  // Paiement partiel : montant personnalisé borné entre 1€ et le montant dû
+  const montantPartiel = Number(options.montant)
+  const isPartial = Number.isFinite(montantPartiel) && montantPartiel > 0 && montantPartiel < montantDu
+  const amount = isPartial ? Math.round(montantPartiel * 100) / 100 : montantDu
+
+  // Paiement en plusieurs fois (échéancier sur le montant à régler)
+  const echeances = Math.max(1, Math.min(4, Number(options.echeances) || 1))
+  const plan = echeances > 1 ? buildInstallments(amount, echeances) : null
+  const installmentPlan = plan ? { n: echeances, montant: amount, schedule: plan.schedule } : null
+
   // solde=1 : au retour, le CRM marque le solde réglé (paiement de relance)
   const returnUrl = `${base}?merci=1&id=${inscription.id}&solde=1`
 
   if (process.env.TEST_MODE === 'true') {
-    console.log('[TEST MODE] Relance paiement — HelloAsso ignoré')
-    return returnUrl
+    console.log(`[TEST MODE] Relance paiement — HelloAsso ignoré (${echeances}x${isPartial ? ' partiel' : ''})`)
+    return { checkoutUrl: returnUrl, amount, installmentPlan, isPartial }
   }
 
   const slug = process.env.HELLOASSO_ORG_SLUG
   const itemName = `Gan Israel — Inscription #${inscription.id}`
-  console.log(`[Relance HelloAsso] slug="${slug}" amount=${Math.round(amount * 100)} return=${returnUrl}`)
+  console.log(`[Relance HelloAsso] slug="${slug}" amount=${Math.round(amount * 100)} echeances=${echeances}${isPartial ? ' partiel' : ''} return=${returnUrl}`)
+
+  const payload = {
+    totalAmount:      plan ? plan.totalCents : Math.round(amount * 100),
+    initialAmount:    plan ? plan.initialAmountCents : Math.round(amount * 100),
+    itemName,
+    backUrl:          base,
+    errorUrl:         base,
+    returnUrl,
+    containsDonation: false,
+    // Renvoyé tel quel dans la notification HelloAsso → permet de retrouver l'inscription.
+    // type 'solde' seulement si paiement intégral du solde en une fois (pour l'auto-marquage CRM).
+    metadata:         { inscriptionId: String(inscription.id), type: (isPartial || plan) ? 'partiel' : 'solde' },
+  }
+  if (plan) payload.terms = plan.terms
 
   const response = await fetch(
     `${HA_BASE}/v5/organizations/${slug}/checkout-intents`,
@@ -538,17 +595,7 @@ async function createSoldeCheckoutUrl(inscription, token) {
         Authorization: `Bearer ${token || await getToken()}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        totalAmount:      Math.round(amount * 100),
-        initialAmount:    Math.round(amount * 100),
-        itemName,
-        backUrl:          base,
-        errorUrl:         base,
-        returnUrl,
-        containsDonation: false,
-        // Renvoyé tel quel dans la notification HelloAsso → permet de retrouver l'inscription
-        metadata:         { inscriptionId: String(inscription.id), type: 'solde' },
-      }),
+      body: JSON.stringify(payload),
     }
   )
 
@@ -557,7 +604,7 @@ async function createSoldeCheckoutUrl(inscription, token) {
   if (!response.ok) throw new Error(`HelloAsso error (HTTP ${response.status}): ${rawText}`)
   const data = JSON.parse(rawText)
   if (!data.redirectUrl) throw new Error(`HelloAsso: pas de redirectUrl reçu — ${rawText}`)
-  return data.redirectUrl
+  return { checkoutUrl: data.redirectUrl, amount, installmentPlan, isPartial }
 }
 
 app.post('/api/admin/inscriptions/:id/relance-paiement', async (req, res) => {
@@ -566,9 +613,10 @@ app.post('/api/admin/inscriptions/:id/relance-paiement', async (req, res) => {
   if (!inscription) return res.status(404).json({ error: 'Inscription introuvable' })
 
   try {
-    const checkoutUrl = await createSoldeCheckoutUrl(inscription)
-    await sendPaymentRetryEmail(inscription, checkoutUrl)
-    console.log(`[Relance paiement] ✓ #${inscription.id} → ${inscription.email}`)
+    const { checkoutUrl, amount, installmentPlan, isPartial } =
+      await createSoldeCheckoutUrl(inscription, null, { echeances: req.body?.echeances, montant: req.body?.montant })
+    await sendPaymentRetryEmail(inscription, checkoutUrl, installmentPlan, { amount, isPartial })
+    console.log(`[Relance paiement] ✓ #${inscription.id} → ${inscription.email} (${amount}€${installmentPlan ? ` en ${installmentPlan.n}x` : ''}${isPartial ? ' — partiel' : ''})`)
     res.json({ ok: true })
   } catch (err) {
     const cause = err.cause ? ` — cause: ${err.cause?.code || err.cause?.message || String(err.cause)}` : ''
@@ -727,7 +775,7 @@ app.post('/api/admin/relance-email', async (req, res) => {
   let sent = 0, errors = []
   for (const insc of avecSolde) {
     try {
-      const checkoutUrl = await createSoldeCheckoutUrl(insc, token)
+      const { checkoutUrl } = await createSoldeCheckoutUrl(insc, token)
       await sendReminderToParent(insc, checkoutUrl)
       sent++
       console.log(`[Relance] ✓ ${insc.parent1_prenom} ${insc.parent1_nom} <${insc.email}>`)
@@ -758,7 +806,7 @@ app.post('/api/admin/relance-email/test', async (req, res) => {
   }
 
   try {
-    const checkoutUrl = await createSoldeCheckoutUrl(sample)
+    const { checkoutUrl } = await createSoldeCheckoutUrl(sample)
     await sendReminderToParent(sample, checkoutUrl)
     console.log(`[Relance TEST] ✓ → ${email}`)
     res.json({ ok: true, email })
@@ -821,7 +869,8 @@ app.post('/api/admin/sync-paiements', async (req, res) => {
 
       const match = payments.find(p => {
         const meta = p.metadata || p.order?.metadata
-        if (meta?.inscriptionId && String(meta.inscriptionId) === String(insc.id)) return true
+        // Match par metadata, sauf paiements partiels/échelonnés (ne soldent pas l'inscription)
+        if (meta?.inscriptionId && String(meta.inscriptionId) === String(insc.id) && meta.type !== 'partiel') return true
         const payerEmail = String(p.payer?.email || '').trim().toLowerCase()
         const amt = (p.amount && typeof p.amount === 'object') ? p.amount.total : p.amount
         return payerEmail && payerEmail === email && Number(amt) === soldeCents
