@@ -629,7 +629,7 @@ app.post('/api/admin/inscriptions/:id/relance-paiement', async (req, res) => {
 app.patch('/api/admin/inscriptions/:id/statut', (req, res) => {
   if (!authAdmin(req, res)) return
   const { statut } = req.body
-  const VALID = ['en_attente', 'accompte_paye', 'solde_paye', 'annule', 'archive', 'attente_validation']
+  const VALID = ['en_attente', 'accompte_paye', 'paiement_partiel', 'solde_paye', 'annule', 'archive', 'attente_validation']
   if (!VALID.includes(statut)) return res.status(400).json({ error: 'Statut invalide' })
 
   if (statut === 'solde_paye') {
@@ -743,7 +743,7 @@ app.post('/api/admin/inscriptions/merge', (req, res) => {
   const accompte = Number(keeper.accompte) + Number(other.accompte)
 
   // Garder le statut le plus avancé
-  const ORDRE = ['attente_validation', 'en_attente', 'accompte_paye', 'solde_paye', 'archive', 'annule']
+  const ORDRE = ['attente_validation', 'en_attente', 'accompte_paye', 'paiement_partiel', 'solde_paye', 'archive', 'annule']
   const statut = ORDRE.indexOf(keeper.statut) >= ORDRE.indexOf(other.statut) ? keeper.statut : other.statut
 
   updateInscription(keepId, { enfants, total, accompte, statut })

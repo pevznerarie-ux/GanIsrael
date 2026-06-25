@@ -4,6 +4,7 @@ const STATUTS = {
   attente_validation: { label: '⏳ Validation admin', color: '#7c3aed', bg: '#ede9fe' },
   en_attente:         { label: 'En attente',          color: '#f59e0b', bg: '#fef3c7' },
   accompte_paye:      { label: 'Acompte payé',        color: '#2563eb', bg: '#dbeafe' },
+  paiement_partiel:   { label: '🟠 Paiement partiel', color: '#c2410c', bg: '#ffedd5' },
   solde_paye:         { label: 'Soldé',               color: '#16a34a', bg: '#dcfce7' },
   annule:             { label: 'Annulé',              color: '#dc2626', bg: '#fee2e2' },
   archive:            { label: 'Archivé',             color: '#94a3b8', bg: '#f1f5f9' },
