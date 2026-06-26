@@ -2614,6 +2614,7 @@ function TabListeAttente({ user, password }) {
   const [loading, setLoading]   = useState(true)
   const [accepting, setAccepting] = useState({})
   const [accepted, setAccepted]   = useState({})
+  const [copiedId, setCopiedId]   = useState(null)
 
   useEffect(() => {
     fetch('/api/admin/liste-attente', { headers: { 'x-admin-user': user, 'x-admin-password': password } })
@@ -2621,6 +2622,20 @@ function TabListeAttente({ user, password }) {
       .then(data => { setList(data); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
+
+  const copyLink = async (id, link) => {
+    try {
+      await navigator.clipboard.writeText(link)
+    } catch {
+      // Repli si l'API clipboard est indisponible (http, anciens navigateurs)
+      const ta = document.createElement('textarea')
+      ta.value = link; document.body.appendChild(ta); ta.select()
+      try { document.execCommand('copy') } catch {}
+      document.body.removeChild(ta)
+    }
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(c => (c === id ? null : c)), 2000)
+  }
 
   const remove = async (id) => {
     if (!confirm('Supprimer cette entrée ?')) return
@@ -2710,28 +2725,59 @@ function TabListeAttente({ user, password }) {
                       : <span style={{ color: '#cbd5e1' }}>—</span>}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {accepted[e.id] ? (
-                        <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>
-                          ✅ Lien envoyé
-                        </span>
-                      ) : e.accepted_at ? (
-                        <span style={{ background: '#fef9c3', color: '#92400e', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>
-                          📨 Déjà invité
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => accept(e.id)}
-                          disabled={accepting[e.id]}
-                          style={{ background: '#16a34a', color: 'white', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-                        >
-                          {accepting[e.id] ? '…' : '✉️ Accepter'}
-                        </button>
-                      )}
-                      <button onClick={() => remove(e.id)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}>
-                        Supprimer
-                      </button>
-                    </div>
+                    {(() => {
+                      const link = accepted[e.id] || e.inscription_url
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {accepted[e.id] ? (
+                              <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>
+                                ✅ Lien envoyé
+                              </span>
+                            ) : e.accepted_at ? (
+                              <span style={{ background: '#fef9c3', color: '#92400e', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 }}>
+                                📨 Déjà invité
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => accept(e.id)}
+                                disabled={accepting[e.id]}
+                                style={{ background: '#16a34a', color: 'white', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                              >
+                                {accepting[e.id] ? '…' : '✉️ Accepter'}
+                              </button>
+                            )}
+                            {link && (
+                              <button
+                                onClick={() => copyLink(e.id, link)}
+                                title={link}
+                                style={{ background: copiedId === e.id ? '#dcfce7' : '#eff6ff', color: copiedId === e.id ? '#15803d' : '#1d4ed8', border: '1.5px solid', borderColor: copiedId === e.id ? '#bbf7d0' : '#bfdbfe', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                              >
+                                {copiedId === e.id ? '✅ Copié !' : '📋 Copier le lien'}
+                              </button>
+                            )}
+                            {e.accepted_at && (
+                              <button
+                                onClick={() => accept(e.id)}
+                                disabled={accepting[e.id]}
+                                title="Renvoyer le lien d'inscription par email"
+                                style={{ background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                              >
+                                {accepting[e.id] ? '…' : '🔁 Renvoyer'}
+                              </button>
+                            )}
+                            <button onClick={() => remove(e.id)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 13 }}>
+                              Supprimer
+                            </button>
+                          </div>
+                          {link && (
+                            <a href={link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#64748b', wordBreak: 'break-all', maxWidth: 280 }}>
+                              {link}
+                            </a>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </td>
                 </tr>
               ))}
