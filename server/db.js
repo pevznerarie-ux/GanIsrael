@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { createHmac } from 'node:crypto'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const dbDir = join(__dirname, '../db')
@@ -255,19 +256,36 @@ export function updateListeAttente(id, data) {
 }
 
 // ── Tokens inscription reservee ───────────────────────────────────────────────
+// Les tokens sont AUTO-SUFFISANTS (signés HMAC) : ils encodent toutes les infos
+// nécessaires, donc le lien reste valide même si le fichier db/tokens.json est
+// effacé (ex. redéploiement Railway sans Volume persistant).
 const tokensFile = join(dbDir, 'tokens.json')
+const TOKEN_SECRET = process.env.TOKEN_SECRET || process.env.ADMIN_PASSWORD || 'gan-israel-token-secret-fallback'
 
 function loadTokens() {
   try { return JSON.parse(readFileSync(tokensFile, 'utf8')) } catch { return [] }
 }
 function saveTokens(data) {
-  writeFileSync(tokensFile, JSON.stringify(data, null, 2), 'utf8')
+  try { writeFileSync(tokensFile, JSON.stringify(data, null, 2), 'utf8') } catch {}
+}
+
+function signToken(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const sig  = createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url')
+  return `${body}.${sig}`
+}
+
+function verifyToken(token) {
+  const parts = String(token || '').split('.')
+  if (parts.length !== 2) return null
+  const [body, sig] = parts
+  const expected = createHmac('sha256', TOKEN_SECRET).update(body).digest('base64url')
+  if (sig !== expected) return null
+  try { return JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) } catch { return null }
 }
 
 export function createToken(data) {
-  const tokens = loadTokens()
-  const entry = {
-    token: Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
+  const payload = {
     created_at: new Date().toISOString(),
     prenom:         data.prenom,
     nom:            data.nom,
@@ -277,11 +295,18 @@ export function createToken(data) {
     semaines:       data.semaines  || [],
     listeAttenteId: data.listeAttenteId,
   }
+  const entry = { ...payload, token: signToken(payload) }
+  // Conservé aussi en fichier (historique / compat anciens tokens aléatoires)
+  const tokens = loadTokens()
   tokens.push(entry)
   saveTokens(tokens)
   return entry
 }
 
 export function getTokenData(token) {
+  // 1) Token signé auto-suffisant (ne dépend pas du fichier) → toujours valide
+  const decoded = verifyToken(token)
+  if (decoded) return decoded
+  // 2) Repli : anciens tokens aléatoires encore présents dans le fichier
   return loadTokens().find(t => t.token === token) || null
 }
